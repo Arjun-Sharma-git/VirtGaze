@@ -1,0 +1,35 @@
+"""Export a trained GazeMLP to ONNX format."""
+from __future__ import annotations
+
+import os
+
+import numpy as np
+
+
+def export_to_onnx(model: "GazeMLP", path: str, input_dim: int = 34) -> None:  # type: ignore[name-defined]
+    """Export *model* to ONNX at *path*.
+
+    Args:
+        model:     Trained GazeMLP in eval mode.
+        path:      Destination .onnx file path.
+        input_dim: Number of input features (default 34).
+    """
+    import torch
+
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    model.eval()
+    dummy_input = torch.randn(1, input_dim)
+    torch.onnx.export(
+        model,
+        dummy_input,
+        path,
+        input_names=["features"],
+        output_names=["screen_coords"],
+        dynamic_axes={
+            "features": {0: "batch"},
+            "screen_coords": {0: "batch"},
+        },
+        opset_version=17,
+        do_constant_folding=True,
+    )
+    print(f"[onnx_export] Exported to {path}")

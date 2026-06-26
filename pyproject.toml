@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaze-estimation"
+version = "0.1.0"
+description = "Production-grade 3D gaze estimation system from a standard webcam"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "3dEyeEstim"}]
+dependencies = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "mediapipe>=0.10.0",
+    "torch>=2.0.0",
+    "onnxruntime>=1.15.0",
+    "onnx>=1.14.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+    "scipy>=1.10.0",
+    "pygame>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+]
+# NVIDIA GPU — TensorRT acceleration (requires CUDA + TensorRT installed)
+gpu = ["tensorrt>=8.6.0"]
+# AMD GPU — ROCm/HIP (install torch+rocm wheel separately, see requirements-rocm.txt)
+# onnxruntime-rocm replaces onnxruntime; not installable from PyPI — use pip flag below.
+rocm = ["onnxruntime-rocm>=1.17.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::FutureWarning",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true

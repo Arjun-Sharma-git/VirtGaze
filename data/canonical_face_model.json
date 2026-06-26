@@ -1,0 +1,15 @@
+{
+  "description": "3D canonical face landmark positions (head coordinate frame, mm)",
+  "landmarks": {
+    "nose_tip":        [0.0, 0.0, 0.0],
+    "chin":            [0.0, -63.6, -12.5],
+    "left_eye_outer":  [-43.3, 20.0, -5.0],
+    "right_eye_outer": [43.3, 20.0, -5.0],
+    "left_mouth":      [-28.0, -28.0, -10.0],
+    "right_mouth":     [28.0, -28.0, -10.0]
+  },
+  "mediapipe_indices": [1, 152, 33, 263, 61, 291],
+  "eyeball_radius_mm": 12.0,
+  "kappa_horizontal_deg": [4.0, 8.0],
+  "kappa_vertical_deg":   [1.0, 2.0]
+}

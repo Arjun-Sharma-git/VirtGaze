@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Project runtime
+profiles/*
+!profiles/.gitkeep
+models/*
+!models/.gitkeep
+logs/
+*.log
+
+# ONNX / TensorRT exports
+*.onnx
+*.trt
+*.engine
+
+# Calibration data / recordings
+data/*.mp4
+data/*.avi
+data/*.csv
+data/test_*
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb

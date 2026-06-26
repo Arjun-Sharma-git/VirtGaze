@@ -1,0 +1,20 @@
+# Example user config — override any keys from default_config.yaml
+# Copy this file and edit it:  cp configs/example_config.yaml configs/my_config.yaml
+
+camera:
+  index: 0          # Webcam device index
+  width: 1280
+  height: 720
+  fps: 60
+
+inference:
+  backend: "onnx"   # "onnx" | "torch" | "tensorrt"
+  device: "CPU"     # "CPU" | "CUDA"
+
+profile:
+  profiles_dir: "profiles"
+
+logging:
+  level: "INFO"
+  log_latency: true
+  log_fps: true

@@ -1,0 +1,33 @@
+# Example configuration for AMD GPU (ROCm) users.
+# Install with:  make install-rocm
+# Run with:      python scripts/run_tracker.py --config configs/example_config_rocm.yaml
+
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  fps: 60
+
+inference:
+  backend: "onnx"
+  device: "ROCM"     # Use ROCMExecutionProvider (requires onnxruntime-rocm)
+  fallback_to_geometric: true
+  confidence_threshold: 0.7
+
+mlp:
+  input_dim: 34
+  hidden_dims: [64, 128, 64]
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  epochs: 200
+  batch_size: 32
+  early_stopping_patience: 20
+  device: "rocm"     # Train on AMD GPU via PyTorch ROCm/HIP wheel
+
+profile:
+  profiles_dir: "profiles"
+
+logging:
+  level: "INFO"
+  log_latency: true
+  log_fps: true
