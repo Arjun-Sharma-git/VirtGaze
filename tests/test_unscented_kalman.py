@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from gaze_estimation.filtering.unscented_kalman import UnscentedKalmanFilter
 
@@ -46,3 +45,47 @@ def test_ukf_state_dimension():
     ukf.update(np.array([0.0, 0.0]))
     state = ukf.get_state()
     assert state.shape == (6,)
+
+
+# ── Fixation-driven measurement-noise scaling ────────────────────────────────
+
+def test_set_measurement_scale_updates_r():
+    ukf = UnscentedKalmanFilter(measurement_noise=5.0)
+    assert ukf.measurement_scale == 1.0
+
+    ukf.set_measurement_scale(2.0)
+
+    assert ukf.measurement_scale == 2.0
+    assert np.allclose(ukf._R, np.eye(2) * 10.0)
+
+
+def test_set_measurement_scale_clamps_to_sane_range():
+    ukf = UnscentedKalmanFilter()
+    ukf.set_measurement_scale(1e9)
+    assert ukf.measurement_scale <= 10.0
+    ukf.set_measurement_scale(-5.0)
+    assert ukf.measurement_scale >= 0.05
+
+
+def test_reset_restores_unit_measurement_scale():
+    ukf = UnscentedKalmanFilter()
+    ukf.set_measurement_scale(3.0)
+    ukf.reset()
+    assert ukf.measurement_scale == 1.0
+
+
+def test_larger_measurement_scale_smooths_more():
+    """A bigger scale means trusting the measurement less (more smoothing)."""
+
+    def _response_after_step(scale: float) -> float:
+        ukf = UnscentedKalmanFilter(process_noise=0.01, measurement_noise=5.0)
+        ukf.update(np.array([500.0, 500.0]))       # start at 500
+        ukf.set_measurement_scale(scale)
+        for _ in range(5):
+            ukf.predict(0.016)
+            ukf.update(np.array([900.0, 500.0]))   # step input
+        return float(ukf.get_position()[0])
+
+    responsive = _response_after_step(0.05)
+    smoothed = _response_after_step(10.0)
+    assert responsive > smoothed

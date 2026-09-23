@@ -29,7 +29,7 @@ def test_bias_map_add_sample_and_correct():
 def test_bias_map_apply():
     bm = BiasMap(cols=4, rows=4)
     bm.add_sample(960, 540, 50.0, 30.0, 1920, 1080)
-    cx, cy = bm.apply(960, 540, 1920, 1080)
+    cx, _cy = bm.apply(960, 540, 1920, 1080)
     # Corrected position should shift toward true position
     assert cx > 960
 
@@ -54,6 +54,35 @@ def test_bias_map_save_load():
         assert abs(dx1 - dx2) < 0.1
     finally:
         os.unlink(path)
+
+
+def test_bias_map_sample_is_reproduced_at_same_location():
+    """A single sample must be read back unchanged where it was recorded.
+
+    Regression test: ``add_sample`` used to bin into ``x/width*cols`` while
+    ``get_correction`` interpolated nodes at ``k/(cols-1)``, so a sample was
+    read back attenuated (10 px instead of 20 px at an off-node position).
+    """
+    bm = BiasMap(cols=10, rows=5)
+    bm.add_sample(960, 540, 20.0, -10.0, 1920, 1080)
+    dx, dy = bm.get_correction(960, 540, 1920, 1080)
+    assert abs(dx - 20.0) < 1e-4
+    assert abs(dy - (-10.0)) < 1e-4
+
+
+def test_bias_map_weighted_average_of_repeated_samples():
+    """Repeated samples at one location must average with equal weight."""
+    bm = BiasMap(cols=8, rows=8)
+    for _ in range(5):
+        bm.add_sample(960, 540, 10.0, 0.0, 1920, 1080)
+    bm.add_sample(960, 540, 30.0, 0.0, 1920, 1080)
+    dx, _ = bm.get_correction(960, 540, 1920, 1080)
+    assert abs(dx - (10.0 * 5 + 30.0) / 6.0) < 1e-3
+
+
+def test_bias_map_requires_minimum_grid():
+    with pytest.raises(ValueError):
+        BiasMap(cols=1, rows=5).add_sample(960, 540, 1.0, 1.0)
 
 
 def test_bias_map_reset():

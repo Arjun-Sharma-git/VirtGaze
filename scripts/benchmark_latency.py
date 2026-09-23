@@ -24,6 +24,7 @@ def main() -> None:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
     import numpy as np
+
     from gaze_estimation.config.config import Config
     from gaze_estimation.pipeline.pipeline import GazeEstimationPipeline
     from gaze_estimation.utils.logging import setup_logging
@@ -35,7 +36,6 @@ def main() -> None:
     pipeline.start()
 
     latencies = []
-    start_ts_map: dict = {}
     collected = 0
     t_start = time.time()
 

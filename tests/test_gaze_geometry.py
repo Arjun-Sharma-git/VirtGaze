@@ -1,14 +1,12 @@
 """Tests for 3D gaze ray computation and angle utilities."""
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
 from gaze_estimation.utils.geometry import (
-    angular_error_deg,
     angles_to_ray,
+    angular_error_deg,
     normalize,
     ray_plane_intersection,
     ray_to_angles,
@@ -28,7 +26,7 @@ def test_ray_to_angles_forward():
 def test_ray_to_angles_right():
     """A ray pointing right should produce positive yaw."""
     direction = np.array([1.0, 0.0, 1.0])
-    yaw, pitch = ray_to_angles(normalize(direction))
+    yaw, _pitch = ray_to_angles(normalize(direction))
     assert yaw > 0
 
 
@@ -94,3 +92,24 @@ def test_screen_to_angles_center():
     yaw, pitch = screen_to_angles(960, 540, 1920, 1080, 600)
     assert abs(yaw) < 0.01
     assert abs(pitch) < 0.01
+
+
+def test_screen_to_angles_matches_ray_convention():
+    """screen_to_angles and ray_to_angles share the up/right-positive sign.
+
+    Below-centre targets and downward gaze rays must both be negative in
+    pitch — otherwise kappa estimation compares mismatched conventions.
+    """
+    below_centre = screen_to_angles(960, 1000, 1920, 1080, 600)
+    assert below_centre[0] == pytest.approx(0.0, abs=1e-6)
+    assert below_centre[1] < 0.0
+
+    down_ray = np.array([0.0, 1.0, 2.0])          # Y is down in camera coords
+    _, ray_pitch = ray_to_angles(normalize(down_ray))
+    assert ray_pitch < 0.0
+
+    right_of_centre = screen_to_angles(1800, 540, 1920, 1080, 600)
+    assert right_of_centre[0] > 0.0
+    right_ray = np.array([1.0, 0.0, 2.0])
+    ray_yaw, _ = ray_to_angles(normalize(right_ray))
+    assert ray_yaw > 0.0

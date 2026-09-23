@@ -5,7 +5,6 @@ import os
 import tempfile
 
 import numpy as np
-import pytest
 
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.model.trainer import MLPTrainer
@@ -67,6 +66,34 @@ def test_trainer_normalise_consistent():
     X2 = trainer.normalise(X[:10])
     assert X2.shape == (10, FEATURE_DIM)
     assert np.isfinite(X2).all()
+
+
+def test_fine_tune_preserves_normalisation_statistics():
+    """Fine-tuning must not refit the z-score stats on the small new batch."""
+    X, Y = _make_data(300)
+    trainer = MLPTrainer(epochs=10, batch_size=64, hidden_dims=[32])
+    model = trainer.train(X, Y, screen_width=1920, screen_height=1080)
+    mean_before = trainer.feature_mean.copy()
+    std_before = trainer.feature_std.copy()
+
+    # Deliberately shifted, tiny batch: refitting here would corrupt the stats.
+    trainer.fine_tune(model, (X[:20] + 5.0).astype(np.float32), Y[:20], epochs=2)
+
+    assert np.allclose(trainer.feature_mean, mean_before)
+    assert np.allclose(trainer.feature_std, std_before)
+
+
+def test_fine_tune_restores_learning_rate_and_epochs():
+    X, Y = _make_data(100)
+    trainer = MLPTrainer(
+        epochs=7, batch_size=32, hidden_dims=[16], learning_rate=1e-3
+    )
+    model = trainer.train(X, Y)
+
+    trainer.fine_tune(model, X[:20], Y[:20], epochs=2, lr=1e-5)
+
+    assert trainer.epochs == 7
+    assert trainer.lr == 1e-3
 
 
 def test_features_dict_to_vector():

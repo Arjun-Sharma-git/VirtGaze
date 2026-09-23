@@ -39,6 +39,9 @@ python scripts/run_calibration.py --user alice
 
 # 4. Quick 5-point recalibration
 python scripts/run_calibration.py --user alice --quick
+
+# 5. Run with click-based online adaptation
+python scripts/run_tracker.py --user alice --implicit-calibration
 ```
 
 ---
@@ -93,11 +96,64 @@ camera:
 
 inference:
   backend: "onnx"    # "onnx" | "torch" | "tensorrt"
-  device: "CPU"      # "CPU" | "CUDA"
+  device: "CPU"      # "CPU" | "CUDA" | "ROCm" | "auto"
+  fallback_distance_mm: 600.0
+  geometric_min_confidence: 0.4
+
+camera:
+  undistort: false           # Apply lens-distortion correction
+  intrinsics_path: ""        # .npz produced by scripts/calibrate_camera.py
 
 mlp:
   hidden_dims: [64, 128, 64]
   epochs: 200
+```
+
+---
+
+## Runtime Features
+
+### Inference backends
+`inference.backend` selects the real backend at runtime:
+
+| backend | implementation | requirement |
+|---------|----------------|-------------|
+| `torch` | in-process `GazeMLP` | none |
+| `onnx`  | ONNX Runtime (`ONNXInference`) | exported `.onnx` per profile |
+| `tensorrt` | TensorRT (`TensorRTInference`) | NVIDIA GPU + prebuilt `.trt` |
+
+The exported ONNX/TensorRT graph expects the **normalised** feature vector, so
+feature z-scoring is always applied by the trainer before the backend runs. If a
+requested backend cannot be initialised, the tracker logs a warning and falls
+back to `torch` rather than failing.
+
+### Spatial bias correction
+During calibration a residual `BiasMap` is built from the model's own
+prediction errors on the calibration targets (`bias_map.npz` per profile) and is
+applied to model predictions at inference time, removing systematic
+location-dependent error.
+
+### Fixation-adaptive smoothing
+The UKF measurement noise is scaled by the current gaze state: heavier
+smoothing while fixating or blinking, more responsive during saccades.
+
+### Live preview & implicit calibration
+`scripts/run_tracker.py` renders a live overlay (face mesh, iris, gaze dot,
+FPS/latency HUD) from the pipeline's preview tap. With
+`--implicit-calibration` the window is fullscreen and each deliberate
+left-click is treated as a gaze-directed click: the model is fine-tuned
+in the background and the updated weights are saved automatically.
+
+```bash
+python scripts/run_tracker.py --user alice --implicit-calibration
+```
+
+### Camera calibration pipeline
+```bash
+# 1. Capture chessboard intrinsics
+python scripts/calibrate_camera.py --output data/camera_intrinsics.npz
+# 2. Point camera.intrinsics_path at it and enable undistortion
+#    camera: {undistort: true, intrinsics_path: "data/camera_intrinsics.npz"}
 ```
 
 ---
@@ -159,12 +215,12 @@ python scripts/export_model.py --user alice --format tensorrt --output models/ga
 
 ## Dependencies
 
-- Python ≥ 3.9
+- Python 3.9 – 3.12 (MediaPipe publishes no wheels for 3.13+)
 - OpenCV ≥ 4.8
 - MediaPipe ≥ 0.10
 - PyTorch ≥ 2.0
 - ONNX Runtime ≥ 1.15
-- PyYAML, Pydantic ≥ 2.0, SciPy, Pygame
+- PyYAML, Pydantic ≥ 2.0, SciPy, Pygame, screeninfo
 
 Optional NVIDIA GPU: `pip install tensorrt` (requires CUDA 11+)
 

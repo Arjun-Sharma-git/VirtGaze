@@ -37,14 +37,49 @@ def load_ground_truth(path: str) -> List[Tuple[float, float, float]]:
     return rows
 
 
+def match_predictions(predictions, ground_truth):
+    """Pair collected predictions with ground-truth rows.
+
+    Prefers nearest-timestamp matching when the two time ranges overlap.  Video
+    replay produces monotonic timestamps which do not relate to the CSV's
+    wall-clock times, so in that case the two sequences are aligned by index.
+
+    Returns:
+        (pred_xy, gt_xy) arrays of shape (N, 2).
+    """
+    import numpy as np
+
+    px = np.array([(p[1], p[2]) for p in predictions], dtype=np.float64)
+    pt = np.array([p[0] for p in predictions], dtype=np.float64)
+    gt_ts = np.array([g[0] for g in ground_truth], dtype=np.float64)
+    gt_xy = np.array([(g[1], g[2]) for g in ground_truth], dtype=np.float64)
+
+    overlap = (
+        pt.size > 0 and gt_ts.size > 0
+        and pt.max() >= gt_ts.min() and pt.min() <= gt_ts.max()
+    )
+    if overlap:
+        idx = np.array([int(np.argmin(np.abs(pt - ts))) for ts in gt_ts])
+    else:
+        print("[benchmark] Timestamp ranges do not overlap — aligning by index")
+        idx = np.linspace(0, len(predictions) - 1, len(ground_truth)).astype(int)
+    return px[idx], gt_xy
+
+
 def main() -> None:
     args = parse_args()
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+    import threading
+    import time
+
     import numpy as np
-    from gaze_estimation.config.config import Config
+
     from gaze_estimation.capture.video_source import VideoFileSource
-    from gaze_estimation.utils.geometry import angular_error_deg, screen_to_angles
+    from gaze_estimation.config.config import Config
+    from gaze_estimation.model.trainer import MLPTrainer
+    from gaze_estimation.pipeline.pipeline import GazeEstimationPipeline
+    from gaze_estimation.profile.profile_manager import ProfileManager
     from gaze_estimation.utils.logging import setup_logging
 
     config = Config.from_yaml(args.config)
@@ -52,12 +87,6 @@ def main() -> None:
 
     gt = load_ground_truth(args.gt)
     print(f"[benchmark] Loaded {len(gt)} ground-truth samples")
-
-    # Run the full pipeline on the video file
-    import queue, threading
-    from gaze_estimation.pipeline.pipeline import GazeEstimationPipeline
-    from gaze_estimation.profile.profile_manager import ProfileManager
-    from gaze_estimation.model.trainer import MLPTrainer
 
     pipeline = GazeEstimationPipeline(config=config)
 
@@ -69,44 +98,52 @@ def main() -> None:
         pipeline.set_model(model, trainer)
         pipeline.update_kappa(profile.kappa_yaw, profile.kappa_pitch)
 
+    # Replay the video file instead of opening a webcam.
+    source = VideoFileSource(
+        video_path=args.video,
+        output_queue=pipeline.frame_queue,
+        stop_event=pipeline.stop_event,
+        loop=False,
+        realtime=False,
+    )
+
     predictions: list = []
     stop_event = threading.Event()
+    last_ts: list = [None]
 
     def _collect() -> None:
         while not stop_event.is_set():
             est = pipeline.get_latest_estimate()
-            if est:
+            # Only record each estimate once (the poller runs faster than the
+            # pipeline produces new estimates).
+            if est is not None and est.timestamp != last_ts[0]:
                 predictions.append((est.timestamp, est.screen_x, est.screen_y))
-            import time
+                last_ts[0] = est.timestamp
             time.sleep(0.005)
 
-    # Replace camera with video source
-    import time
-    pipeline.start()
+    pipeline.start(frame_source=source)
     col_thread = threading.Thread(target=_collect, daemon=True)
     col_thread.start()
 
-    # Wait for video to complete (approximate: 10s max)
-    time.sleep(15)
+    # Wait for the video to finish replaying (bounded).
+    deadline = time.time() + 300.0
+    while source.is_alive() and time.time() < deadline and not stop_event.is_set():
+        time.sleep(0.1)
+    time.sleep(1.0)  # let the pipeline flush the final frames
+
     stop_event.set()
+    col_thread.join(timeout=1.0)
     pipeline.stop()
 
     if not predictions:
         print("[benchmark] No predictions collected")
         return
 
-    # Match predictions to GT by nearest timestamp
-    px = np.array([(p[1], p[2]) for p in predictions])
-    pt = np.array([p[0] for p in predictions])
-    errors_px = []
-    for ts, gx, gy in gt:
-        idx = int(np.argmin(np.abs(pt - ts)))
-        err = float(np.linalg.norm(np.array([px[idx, 0] - gx, px[idx, 1] - gy])))
-        errors_px.append(err)
+    pred_xy, gt_xy = match_predictions(predictions, gt)
+    errors = np.linalg.norm(pred_xy - gt_xy, axis=1)
 
-    errors = np.array(errors_px)
     print(f"\n{'='*50}")
-    print(f"  Screen-space errors (pixels)")
+    print(f"  Screen-space errors (pixels, n={len(errors)})")
     print(f"  Mean:   {errors.mean():.1f} px")
     print(f"  Median: {np.median(errors):.1f} px")
     print(f"  95th%:  {np.percentile(errors, 95):.1f} px")
