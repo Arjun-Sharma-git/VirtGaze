@@ -33,18 +33,32 @@ class HeadPoseEstimator(StageThread):
         stop_event: threading.Event,
         camera_matrix: np.ndarray,
         dist_coeffs: np.ndarray,
+        tap_queue: Optional[queue.Queue] = None,
         name: str = "pose_thread",
     ) -> None:
         super().__init__(
             input_queue=input_queue,
             output_queue=output_queue,
             stop_event=stop_event,
+            tap_queue=tap_queue,
             name=name,
         )
         self._camera_matrix = camera_matrix.astype(np.float64)
         self._dist_coeffs = dist_coeffs.astype(np.float64)
         self._prev_rvec: Optional[np.ndarray] = None
         self._prev_tvec: Optional[np.ndarray] = None
+
+    # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_camera_intrinsics(
+        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
+    ) -> None:
+        """Update camera intrinsics at runtime (read per-frame, so this is safe)."""
+        self._camera_matrix = camera_matrix.astype(np.float64)
+        self._dist_coeffs = dist_coeffs.astype(np.float64)
+        # Stale extrinsic guesses are worse than none after an intrinsics change
+        self._prev_rvec = None
+        self._prev_tvec = None
 
     # ── StageThread ────────────────────────────────────────────────────────
 

@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import queue
 import threading
-import math
-from typing import Optional, Tuple
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -34,12 +33,14 @@ class FaceMeshExtractor(StageThread):
         max_num_faces: int = 1,
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
+        tap_queue: Optional[queue.Queue] = None,
         name: str = "mesh_thread",
     ) -> None:
         super().__init__(
             input_queue=input_queue,
             output_queue=output_queue,
             stop_event=stop_event,
+            tap_queue=tap_queue,
             name=name,
         )
         self._refine_iris = refine_iris
@@ -145,7 +146,6 @@ class FaceMeshExtractor(StageThread):
 
     def _emit_empty(self, item: FacePacket) -> None:
         """Emit a MeshPacket with empty landmarks when detection fails."""
-        h, w = item.frame.shape[:2]
         self.emit(
             MeshPacket(
                 timestamp=item.timestamp,

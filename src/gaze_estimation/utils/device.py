@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
 
 
 class Backend(str, Enum):
@@ -12,7 +15,7 @@ class Backend(str, Enum):
     TENSORRT = "TENSORRT"
 
 
-def get_torch_device(requested: str = "CPU") -> "torch.device":  # type: ignore[name-defined]
+def get_torch_device(requested: str = "CPU") -> torch.device:
     """Return the best available torch device for the requested backend.
 
     Args:

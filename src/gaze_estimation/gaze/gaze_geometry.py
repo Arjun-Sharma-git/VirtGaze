@@ -1,19 +1,21 @@
 """3D gaze ray computation from iris centres and head pose."""
 from __future__ import annotations
 
-import math
 import queue
 import threading
-from typing import Optional, Tuple
+from typing import Optional
 
 import cv2
 import numpy as np
 
+from gaze_estimation.gaze.gaze_features import FeatureExtractor
 from gaze_estimation.pipeline.schemas import (
-    GazePacket, GazeRay, HeadPose, PosePacket,
+    GazePacket,
+    GazeRay,
+    HeadPose,
+    PosePacket,
 )
 from gaze_estimation.pipeline.thread_base import StageThread
-from gaze_estimation.gaze.gaze_features import FeatureExtractor
 from gaze_estimation.utils.geometry import normalize, ray_to_angles
 
 
@@ -33,12 +35,14 @@ class GazeGeometryEstimator(StageThread):
         kappa_yaw: float = 0.0,
         kappa_pitch: float = 0.0,
         eyeball_radius: float = 12.0,
+        tap_queue: Optional[queue.Queue] = None,
         name: str = "gaze_thread",
     ) -> None:
         super().__init__(
             input_queue=input_queue,
             output_queue=output_queue,
             stop_event=stop_event,
+            tap_queue=tap_queue,
             name=name,
         )
         self._camera_matrix = camera_matrix.astype(np.float64)
@@ -54,6 +58,13 @@ class GazeGeometryEstimator(StageThread):
         """Update kappa angles (called after calibration)."""
         self._kappa_yaw = kappa_yaw
         self._kappa_pitch = kappa_pitch
+
+    def set_camera_intrinsics(
+        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
+    ) -> None:
+        """Update camera intrinsics at runtime (read per-frame, so this is safe)."""
+        self._camera_matrix = camera_matrix.astype(np.float64)
+        self._dist_coeffs = dist_coeffs.astype(np.float64)
 
     # ── StageThread ────────────────────────────────────────────────────────
 

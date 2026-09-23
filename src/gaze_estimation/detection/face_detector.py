@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
+from gaze_estimation.detection.face_tracker import FaceTracker
 from gaze_estimation.pipeline.schemas import FacePacket, FramePacket
 from gaze_estimation.pipeline.thread_base import StageThread
 
@@ -48,7 +49,7 @@ class FaceDetector(StageThread):
         self._detector = None           # MediaPipe detector (lazy init in thread)
         self._frame_counter: int = 0
         self._prev_bbox: Optional[tuple] = None
-        self._prev_gray: Optional[np.ndarray] = None
+        self._tracker = FaceTracker()   # Between-detection ROI tracking
 
     # ── StageThread ────────────────────────────────────────────────────────
 
@@ -74,18 +75,25 @@ class FaceDetector(StageThread):
         frame = item.frame
         self._frame_counter += 1
 
-        # Full detection every N frames, else ROI track
+        # Full MediaPipe detection every N frames; mean-shift tracking between
+        bbox: Optional[tuple] = None
+        landmarks: Optional[np.ndarray] = None
+        confidence = 0.0
+
         if self._frame_counter % self._detection_interval == 0 or self._prev_bbox is None:
             result = self._detect_full(frame)
+            if result is not None:
+                bbox, confidence, landmarks = result
+                # (Re)initialise the ROI tracker from the fresh detection
+                self._tracker.init(frame, bbox)
         else:
-            result = self._track_roi(frame, self._prev_bbox)
+            bbox, confidence = self._tracker.update(frame)
 
-        if result is not None:
-            bbox, confidence, landmarks = result
-            self._prev_bbox = bbox
-        else:
-            bbox, confidence, landmarks = None, 0.0, None
-            self._prev_bbox = None
+        self._prev_bbox = bbox
+        if bbox is None:
+            # Lost the face — drop tracker state so the next frame re-detects
+            self._tracker.reset()
+            confidence = 0.0
 
         self.emit(
             FacePacket(
@@ -135,38 +143,6 @@ class FaceDetector(StageThread):
         ) if kps else None
 
         return bbox, confidence, landmarks
-
-    def _track_roi(
-        self, frame: np.ndarray, prev_bbox: Optional[tuple]
-    ) -> Optional[Tuple[tuple, float, Optional[np.ndarray]]]:
-        """Lightweight mean-shift tracking within the previous ROI."""
-        if prev_bbox is None:
-            return None
-
-        x, y, bw, bh = prev_bbox
-        # Clamp ROI to frame
-        h_f, w_f = frame.shape[:2]
-        x = max(0, min(x, w_f - 1))
-        y = max(0, min(y, h_f - 1))
-        bw = max(1, min(bw, w_f - x))
-        bh = max(1, min(bh, h_f - y))
-
-        try:
-            roi = frame[y: y + bh, x: x + bw]
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv, np.array((0., 60., 32.)), np.array((180., 255., 255.)))
-            hist = cv2.calcHist([roi_hsv], [0], None, [180], [0, 180])
-            cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
-            back_proj = cv2.calcBackProject([hsv], [0], hist, [0, 180], 1)
-            back_proj &= mask
-            term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
-            window = (x, y, bw, bh)
-            _ret, track_window = cv2.meanShift(back_proj, window, term_crit)
-            tx, ty, tw, th = track_window
-            return (tx, ty, tw, th), 0.6, None   # Medium confidence for tracked ROI
-        except Exception:
-            return prev_bbox, 0.5, None
 
     def _fallback_detect(
         self, frame: np.ndarray

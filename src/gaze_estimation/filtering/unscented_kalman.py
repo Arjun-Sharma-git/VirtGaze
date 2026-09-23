@@ -7,6 +7,10 @@ from __future__ import annotations
 
 import numpy as np
 
+# Bounds for the fixation-driven measurement-noise scaling
+_MIN_MEASUREMENT_SCALE = 0.05
+_MAX_MEASUREMENT_SCALE = 10.0
+
 
 class UnscentedKalmanFilter:
     """6-state UKF (position, velocity, acceleration) for 2-D gaze.
@@ -50,9 +54,34 @@ class UnscentedKalmanFilter:
 
         # Noise matrices
         self._Q = np.eye(n) * process_noise
-        self._R = np.eye(self.MEASURE_DIM) * measurement_noise
+        self._base_measurement_noise = float(measurement_noise)
+        self._measurement_scale = 1.0
+        self._R = np.eye(self.MEASURE_DIM) * self._base_measurement_noise
 
     # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_measurement_scale(self, scale: float) -> None:
+        """Scale the measurement-noise covariance ``R``.
+
+        Used to adapt smoothing to the current gaze state: a larger scale makes
+        the filter trust the measurement less (heavier smoothing), a smaller
+        one makes it more responsive during saccades.  *scale* is clamped to a
+        sane range.
+        """
+        scale = float(
+            min(max(scale, _MIN_MEASUREMENT_SCALE), _MAX_MEASUREMENT_SCALE)
+        )
+        if scale == self._measurement_scale:
+            return
+        self._measurement_scale = scale
+        self._R = np.eye(self.MEASURE_DIM) * (
+            self._base_measurement_noise * scale
+        )
+
+    @property
+    def measurement_scale(self) -> float:
+        """Current measurement-noise scale (1.0 = configured value)."""
+        return self._measurement_scale
 
     def predict(self, dt: float) -> None:
         """Predict the next state using a constant-acceleration model."""
@@ -135,6 +164,7 @@ class UnscentedKalmanFilter:
         self._x = np.zeros(n)
         self._P = np.eye(n) * 100.0
         self._initialised = False
+        self.set_measurement_scale(1.0)
 
     # ── Private ────────────────────────────────────────────────────────────
 

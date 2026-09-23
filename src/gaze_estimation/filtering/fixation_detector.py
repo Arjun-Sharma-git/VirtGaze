@@ -38,7 +38,7 @@ class FixationDetector:
         self._min_fix_dur = min_fixation_duration
 
         self._state = GazeState.LOST
-        self._state_start: float = time.monotonic()
+        self._state_start: float = time.perf_counter()
         self._prev_x: Optional[float] = None
         self._prev_y: Optional[float] = None
         self._prev_t: Optional[float] = None
@@ -132,7 +132,7 @@ class FixationDetector:
     def reset(self) -> None:
         """Reset detector state."""
         self._state = GazeState.LOST
-        self._state_start = time.monotonic()
+        self._state_start = time.perf_counter()
         self._prev_x = None
         self._prev_y = None
         self._prev_t = None

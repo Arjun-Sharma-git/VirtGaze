@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
+
+from gaze_estimation.calibration.calibration_target import CalibrationTarget
 
 
 class CalibrationUI:
@@ -32,14 +34,27 @@ class CalibrationUI:
         screen_height: int = 1080,
         bg_color: Tuple[int, int, int] = (30, 30, 30),
         dot_color: Tuple[int, int, int] = (255, 50, 50),
+        base_radius: float = 20.0,
+        pulse_amplitude: float = 0.3,
+        pulse_freq_hz: float = 2.5,
+        circular_radius: float = 15.0,
+        circular_freq_hz: float = 1.0,
     ) -> None:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self._bg_color = bg_color
         self._dot_color = dot_color
 
-        self._target_x: float = screen_width / 2
-        self._target_y: float = screen_height / 2
+        # Animated target (pulse + circular drift) shared with the pipeline
+        self._target = CalibrationTarget(
+            base_radius=base_radius,
+            pulse_amplitude=pulse_amplitude,
+            pulse_freq_hz=pulse_freq_hz,
+            circular_radius=circular_radius,
+            circular_freq_hz=circular_freq_hz,
+        )
+        self._target.set_position(screen_width / 2, screen_height / 2)
+
         self._progress: float = 0.0
         self._message: str = "Look at the red dot"
         self._running = False
@@ -70,9 +85,8 @@ class CalibrationUI:
         self._running = False
 
     def set_target(self, x: float, y: float) -> None:
-        """Move the calibration target to (x, y)."""
-        self._target_x = x
-        self._target_y = y
+        """Move the calibration target to (x, y) and restart its animation."""
+        self._target.set_position(x, y)
 
     def set_progress(self, fraction: float) -> None:
         """Set the progress bar fill (0.0 – 1.0)."""
@@ -98,12 +112,13 @@ class CalibrationUI:
         self._screen.fill(self._bg_color)
 
         # Animated target
-        t = time.monotonic()
-        base_r = 20
-        pulse = int(base_r * 0.3 * abs(pg.math.sin(t * 2.5 * 3.14159)))
-        radius = base_r + pulse
-        ix, iy = int(self._target_x), int(self._target_y)
-        pg.draw.circle(self._screen, self._dot_color, (ix, iy), radius)
+        state = self._target.update(time.monotonic())
+        radius = max(2, int(state.radius))
+        ix, iy = int(state.x), int(state.y)
+        alpha = max(0.0, min(1.0, state.alpha))
+        color = tuple(int(c * alpha + bg * (1.0 - alpha))
+                      for c, bg in zip(self._dot_color, self._bg_color))
+        pg.draw.circle(self._screen, color, (ix, iy), radius)
         pg.draw.circle(self._screen, (255, 255, 255), (ix, iy), 5)
 
         # Progress bar
@@ -137,3 +152,8 @@ class CalibrationUI:
         """Run the render loop until *condition_fn* returns False or ESC."""
         while condition_fn() and self.update():
             pass
+
+    @property
+    def target(self) -> CalibrationTarget:
+        """The animated target shared with the calibration engine."""
+        return self._target

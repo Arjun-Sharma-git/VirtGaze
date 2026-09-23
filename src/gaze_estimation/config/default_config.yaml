@@ -4,6 +4,8 @@ camera:
   height: 720
   fps: 60
   auto_exposure: true
+  undistort: false          # Apply lens-distortion correction (needs intrinsics)
+  intrinsics_path: ""       # Optional .npz from scripts/calibrate_camera.py
 
 detection:
   model: "mediapipe_short"   # "mediapipe_short" | "mediapipe_full"
@@ -56,6 +58,10 @@ inference:
                       # auto: selects best available device at runtime
   fallback_to_geometric: true
   confidence_threshold: 0.7
+  # Geometric fallback: assumed eye-to-screen distance and the minimum
+  # confidence at which the fallback (instead of "hold") is used.
+  fallback_distance_mm: 600.0
+  geometric_min_confidence: 0.4
 
 filtering:
   ukf:
