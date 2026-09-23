@@ -10,7 +10,8 @@ camera:
 
 inference:
   backend: "onnx"
-  device: "ROCM"     # Use ROCMExecutionProvider (requires onnxruntime-rocm)
+  device: "ROCM"     # Use ROCMExecutionProvider (requires onnxruntime-rocm).
+                     # Also selects the PyTorch training device (MLPTrainer.from_config).
   fallback_to_geometric: true
   confidence_threshold: 0.7
 
@@ -22,7 +23,6 @@ mlp:
   epochs: 200
   batch_size: 32
   early_stopping_patience: 20
-  device: "rocm"     # Train on AMD GPU via PyTorch ROCm/HIP wheel
 
 profile:
   profiles_dir: "profiles"

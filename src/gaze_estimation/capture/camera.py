@@ -44,6 +44,7 @@ class CameraCapture(StageThread):
         camera_matrix: Optional[np.ndarray] = None,
         dist_coeffs: Optional[np.ndarray] = None,
         undistort: bool = False,
+        auto_exposure: bool = True,
         name: str = "camera_thread",
     ) -> None:
         super().__init__(
@@ -71,6 +72,7 @@ class CameraCapture(StageThread):
         self._undistort = undistort
         self._map1: Optional[np.ndarray] = None
         self._map2: Optional[np.ndarray] = None
+        self._auto_exposure = auto_exposure
 
     # ── StageThread interface ─────────────────────────────────────────────
 
@@ -163,6 +165,29 @@ class CameraCapture(StageThread):
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         cap.set(cv2.CAP_PROP_FPS, self._target_fps)
+
+        # Auto-exposure is the single most common cause of "gaze works, then
+        # breaks" — the webcam silently brightens/darkens and the iris
+        # landmarks shift.  The meaning of CAP_PROP_AUTO_EXPOSURE is
+        # backend-specific: V4L2 (Linux) uses 3 = auto / 1 = manual, while
+        # DirectShow (Windows) uses 0.75 / 0.25.  Set both conventions and log
+        # what the driver actually reports; failure is non-fatal.
+        try:
+            cap.set(
+                cv2.CAP_PROP_AUTO_EXPOSURE,
+                3.0 if self._auto_exposure else 1.0,
+            )
+            cap.set(
+                cv2.CAP_PROP_AUTO_EXPOSURE,
+                0.75 if self._auto_exposure else 0.25,
+            )
+            self._logger.info(
+                "Auto-exposure %s (driver reports %.2f)",
+                "enabled" if self._auto_exposure else "disabled",
+                cap.get(cv2.CAP_PROP_AUTO_EXPOSURE),
+            )
+        except Exception as exc:
+            self._logger.debug("Could not set auto-exposure: %s", exc)
 
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

@@ -82,6 +82,28 @@ class MLPTrainer:
         self.screen_width: int = 1920
         self.screen_height: int = 1080
 
+    @classmethod
+    def from_config(cls, config) -> MLPTrainer:
+        """Build a trainer from a :class:`~gaze_estimation.config.config.Config`.
+
+        Reads the ``mlp`` section (architecture + optimisation settings) and
+        ``inference.device``.  The dataset-dependent ``epochs``/``batch_size``
+        actually used are still chosen by :meth:`train`/:meth:`fine_tune`; these
+        values are the configured ceiling.
+        """
+        mlp = config.section("mlp")
+        hidden = mlp.get("hidden_dims")
+        return cls(
+            input_dim=int(mlp.get("input_dim", FEATURE_DIM)),
+            hidden_dims=list(hidden) if hidden else None,
+            learning_rate=float(mlp.get("learning_rate", 1e-3)),
+            weight_decay=float(mlp.get("weight_decay", 1e-4)),
+            epochs=int(mlp.get("epochs", 200)),
+            batch_size=int(mlp.get("batch_size", 32)),
+            early_stopping_patience=int(mlp.get("early_stopping_patience", 20)),
+            device=str(config.get("inference.device", "cpu")),
+        )
+
     # ── Main API ───────────────────────────────────────────────────────────
 
     def train(
@@ -249,8 +271,16 @@ class MLPTrainer:
             path,
         )
 
-    def load(self, path: str) -> Tuple[GazeMLP, MLPTrainer]:
+    def load(self, path: str, config=None) -> Tuple[GazeMLP, MLPTrainer]:
         """Load a GazeMLP and restore trainer normalisation stats.
+
+        Args:
+            path:   Checkpoint written by :meth:`save`.
+            config: Optional :class:`~gaze_estimation.config.config.Config`.
+                    When given, the returned trainer is built with
+                    :meth:`from_config` so the configured optimisation settings
+                    (LR, epochs, …) survive the round-trip; the architecture is
+                    still taken from the checkpoint.
 
         Returns (model, trainer_with_stats).
         """
@@ -273,10 +303,15 @@ class MLPTrainer:
         model.load_state_dict(ckpt["state_dict"])
         model.eval()
 
-        trainer = MLPTrainer(
-            input_dim=model.input_dim,
-            hidden_dims=list(model.hidden_dims),
-        )
+        if config is not None:
+            trainer = type(self).from_config(config)
+            trainer.input_dim = model.input_dim
+            trainer.hidden_dims = list(model.hidden_dims)
+        else:
+            trainer = MLPTrainer(
+                input_dim=model.input_dim,
+                hidden_dims=list(model.hidden_dims),
+            )
         trainer.feature_mean = _from_checkpoint(ckpt.get("feature_mean"))
         trainer.feature_std = _from_checkpoint(ckpt.get("feature_std"))
         trainer.screen_width = ckpt.get("screen_width", 1920)

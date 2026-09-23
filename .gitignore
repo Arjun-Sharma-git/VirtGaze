@@ -52,3 +52,6 @@ data/test_*
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+
+# Debug frame dumps (logging.save_debug_frames)
+debug_frames/

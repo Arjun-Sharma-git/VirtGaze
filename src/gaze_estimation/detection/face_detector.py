@@ -11,9 +11,35 @@ import numpy as np
 from gaze_estimation.detection.face_tracker import FaceTracker
 from gaze_estimation.pipeline.schemas import FacePacket, FramePacket
 from gaze_estimation.pipeline.thread_base import StageThread
+from gaze_estimation.utils.logging import get_logger
+
+_logger = get_logger("detection.face_detector")
+
+# MediaPipe FaceDetection ``model_selection`` values:
+#   0 — short-range model (within ~2 m; faster, the webcam default)
+#   1 — full-range model (within ~5 m)
+_DETECTION_MODELS = {
+    "mediapipe_short": 0,
+    "mediapipe_full": 1,
+}
+_DEFAULT_DETECTION_MODEL = "mediapipe_short"
 
 # MediaPipe landmark indices used as face_landmarks_2d (for solvePnP seed)
 _MP_FACE_KEY_INDICES = [0, 1, 2, 3, 4, 5]  # 6 keypoints from mediapipe face detection
+
+
+def resolve_detection_model(model: str) -> Tuple[str, int]:
+    """Map a ``detection.model`` config string to ``(name, model_selection)``.
+
+    Unknown names fall back to the default short-range model with a warning.
+    """
+    key = str(model).strip().lower()
+    if key not in _DETECTION_MODELS:
+        _logger.warning(
+            "Unknown detection.model %r — using %s", model, _DEFAULT_DETECTION_MODEL
+        )
+        key = _DEFAULT_DETECTION_MODEL
+    return key, _DETECTION_MODELS[key]
 
 
 class FaceDetector(StageThread):
@@ -26,6 +52,12 @@ class FaceDetector(StageThread):
     Emits :class:`~gaze_estimation.pipeline.schemas.FacePacket` objects.
     If no face is detected, emits a FacePacket with ``face_bbox=None`` so
     downstream stages know to enter coasting mode.
+
+    Args:
+        detection_interval: Run full detection every N frames.
+        min_confidence:     MediaPipe detection confidence threshold.
+        model:              ``"mediapipe_short"`` (≤2 m) or
+                            ``"mediapipe_full"`` (≤5 m).
     """
 
     def __init__(
@@ -35,6 +67,7 @@ class FaceDetector(StageThread):
         stop_event: threading.Event,
         detection_interval: int = 5,
         min_confidence: float = 0.5,
+        model: str = _DEFAULT_DETECTION_MODEL,
         name: str = "detection_thread",
     ) -> None:
         super().__init__(
@@ -45,6 +78,7 @@ class FaceDetector(StageThread):
         )
         self._detection_interval = detection_interval
         self._min_confidence = min_confidence
+        self._model_name, self._model_selection = resolve_detection_model(model)
 
         self._detector = None           # MediaPipe detector (lazy init in thread)
         self._frame_counter: int = 0
@@ -57,10 +91,14 @@ class FaceDetector(StageThread):
         try:
             import mediapipe as mp
             self._detector = mp.solutions.face_detection.FaceDetection(
-                model_selection=0,
+                model_selection=self._model_selection,
                 min_detection_confidence=self._min_confidence,
             )
-            self._logger.info("MediaPipe FaceDetection initialised")
+            self._logger.info(
+                "MediaPipe FaceDetection initialised (model=%s, selection=%d)",
+                self._model_name,
+                self._model_selection,
+            )
         except Exception as exc:
             self._logger.error("Could not initialise MediaPipe: %s", exc)
 

@@ -12,6 +12,35 @@ from gaze_estimation.pipeline.schemas import HeadPose, MeshPacket, PosePacket
 from gaze_estimation.pipeline.thread_base import StageThread
 from gaze_estimation.pose.canonical_face import CANONICAL_3D_POINTS, LANDMARK_INDICES
 from gaze_estimation.utils.geometry import rotation_matrix_to_euler
+from gaze_estimation.utils.logging import get_logger
+
+_logger = get_logger("pose.head_pose")
+
+# Fallback when ``pose.solvepnp_method`` names an unknown OpenCV constant.
+_SOLVEPNP_FALLBACK = "SOLVEPNP_ITERATIVE"
+
+# RANSAC parameters used when ``pose.use_ransac`` is enabled.
+_RANSAC_ITERATIONS = 100
+_RANSAC_REPROJECTION_ERROR_PX = 3.0
+
+
+def resolve_solvepnp_flags(method: str) -> int:
+    """Map a ``SOLVEPNP_*`` config string to the OpenCV constant.
+
+    Accepts either the full constant name (``"SOLVEPNP_EPNP"``) or the short
+    form (``"EPNP"``).  Unknown names fall back to ``SOLVEPNP_ITERATIVE`` so a
+    typo degrades the solver instead of failing every frame.
+    """
+    name = str(method).strip().upper()
+    if not name.startswith("SOLVEPNP_"):
+        name = f"SOLVEPNP_{name}"
+    flag = getattr(cv2, name, None)
+    if not isinstance(flag, int):
+        _logger.warning(
+            "Unknown solvepnp method %r — falling back to %s", method, _SOLVEPNP_FALLBACK
+        )
+        return int(getattr(cv2, _SOLVEPNP_FALLBACK))
+    return flag
 
 
 class HeadPoseEstimator(StageThread):
@@ -24,6 +53,15 @@ class HeadPoseEstimator(StageThread):
     - ``rvec``  — Rodrigues rotation vector  (3,)
     - ``tvec``  — translation vector in camera frame (mm)  (3,)
     - ``euler_angles`` — [yaw, pitch, roll] in degrees
+
+    Args:
+        camera_matrix:    3×3 camera intrinsics.
+        dist_coeffs:      Lens distortion coefficients.
+        solvepnp_method:  Name of the OpenCV ``SOLVEPNP_*`` solver to use
+                          (default ``"SOLVEPNP_ITERATIVE"``).
+        use_ransac:       Use ``cv2.solvePnPRansac`` to reject outlier
+                          landmarks instead of ``cv2.solvePnP``.
+        tap_queue:        Optional observer tap.
     """
 
     def __init__(
@@ -33,6 +71,8 @@ class HeadPoseEstimator(StageThread):
         stop_event: threading.Event,
         camera_matrix: np.ndarray,
         dist_coeffs: np.ndarray,
+        solvepnp_method: str = "SOLVEPNP_ITERATIVE",
+        use_ransac: bool = False,
         tap_queue: Optional[queue.Queue] = None,
         name: str = "pose_thread",
     ) -> None:
@@ -47,6 +87,9 @@ class HeadPoseEstimator(StageThread):
         self._dist_coeffs = dist_coeffs.astype(np.float64)
         self._prev_rvec: Optional[np.ndarray] = None
         self._prev_tvec: Optional[np.ndarray] = None
+        self._solvepnp_method = str(solvepnp_method)
+        self._flags = resolve_solvepnp_flags(self._solvepnp_method)
+        self._use_ransac = bool(use_ransac)
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -104,21 +147,35 @@ class HeadPoseEstimator(StageThread):
             init_tvec = None
 
         try:
-            success, rvec, tvec = cv2.solvePnP(
-                CANONICAL_3D_POINTS,
-                image_points,
-                self._camera_matrix,
-                self._dist_coeffs,
-                rvec=init_rvec,
-                tvec=init_tvec,
-                useExtrinsicGuess=use_extrinsic,
-                flags=cv2.SOLVEPNP_ITERATIVE,
-            )
+            if self._use_ransac:
+                success, rvec, tvec, _inliers = cv2.solvePnPRansac(
+                    CANONICAL_3D_POINTS,
+                    image_points,
+                    self._camera_matrix,
+                    self._dist_coeffs,
+                    rvec=init_rvec,
+                    tvec=init_tvec,
+                    useExtrinsicGuess=use_extrinsic,
+                    iterationsCount=_RANSAC_ITERATIONS,
+                    reprojectionError=_RANSAC_REPROJECTION_ERROR_PX,
+                    flags=self._flags,
+                )
+            else:
+                success, rvec, tvec = cv2.solvePnP(
+                    CANONICAL_3D_POINTS,
+                    image_points,
+                    self._camera_matrix,
+                    self._dist_coeffs,
+                    rvec=init_rvec,
+                    tvec=init_tvec,
+                    useExtrinsicGuess=use_extrinsic,
+                    flags=self._flags,
+                )
         except cv2.error as exc:
             self._logger.debug("solvePnP failed: %s", exc)
             return None
 
-        if not success:
+        if not success or rvec is None or tvec is None:
             return None
 
         rvec = rvec.flatten()

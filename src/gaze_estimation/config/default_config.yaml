@@ -43,6 +43,8 @@ quick_calibration:
   target_duration_sec: 1.0
 
 mlp:
+  # Read by MLPTrainer.from_config(); hidden_dims also defines the architecture
+  # stored in each profile checkpoint.
   input_dim: 34
   hidden_dims: [64, 128, 64]
   learning_rate: 0.001
@@ -56,7 +58,10 @@ inference:
   device: "CPU"       # "CPU" | "CUDA" | "ROCM" | "auto"
                       # ROCM: AMD GPU via ROCm/HIP (requires onnxruntime-rocm)
                       # auto: selects best available device at runtime
+                      # Also selects the PyTorch training device (MLPTrainer.from_config).
   fallback_to_geometric: true
+                      # false: never project gaze angles geometrically — hold at
+                      # the screen centre when no model/low confidence is available.
   confidence_threshold: 0.7
   # Geometric fallback: assumed eye-to-screen distance and the minimum
   # confidence at which the fallback (instead of "hold") is used.

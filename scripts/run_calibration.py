@@ -63,6 +63,27 @@ def main() -> None:
     bias_rows = int(bias_cfg.get("rows", 20))
     bias_smoothing = float(bias_cfg.get("smoothing_sigma", 1.0))
 
+    # Calibration settings (all previously ignored in favour of ctor defaults)
+    cal_cfg = config.section("calibration")
+    qc_cfg = config.section("quick_calibration")
+    prof_cfg = config.section("profile")
+    full_grid = (
+        int(cal_cfg.get("grid_cols", 5)),
+        int(cal_cfg.get("grid_rows", 5)),
+    )
+
+    def _make_ui() -> CalibrationUI:
+        """Build the calibration window honouring the target animation flags."""
+        pulse = bool(cal_cfg.get("pulse_animation", True))
+        circular = bool(cal_cfg.get("circular_motion", True))
+        radius = float(cal_cfg.get("circular_radius_px", 15.0))
+        return CalibrationUI(
+            screen_width=sw,
+            screen_height=sh,
+            pulse_amplitude=0.3 if pulse else 0.0,
+            circular_radius=radius if circular else 0.0,
+        )
+
     def _apply_to_running_pipeline(result) -> None:
         """Attach the freshly-trained model + kappa to the live pipeline."""
         pipeline.update_kappa(result.kappa_yaw, result.kappa_pitch)
@@ -76,6 +97,9 @@ def main() -> None:
 
     def _persist(result) -> None:
         """Persist calibration results so the next session reloads them."""
+        if not bool(prof_cfg.get("auto_save", True)):
+            print("[calibration] profile.auto_save=false — results not saved")
+            return
         saved_bias_path = None
         if result.bias_map is not None:
             try:
@@ -96,7 +120,7 @@ def main() -> None:
             dist_coeffs=dist_coeffs,
             calibration_samples=len(result.samples),
             bias_map_path=saved_bias_path,
-            grid=(5, 5) if not args.quick else (3, 3),
+            grid=(3, 3) if args.quick else full_grid,
         )
         print(f"[calibration] Saved calibration for user '{args.user}'")
 
@@ -109,9 +133,15 @@ def main() -> None:
             args.quick = False
         else:
             trainer = MLPTrainer()
-            model, trainer = trainer.load(profile.mlp_weights_path)
-            qc = QuickCalibration(sw, sh, trainer=trainer)
-            ui = CalibrationUI(screen_width=sw, screen_height=sh)
+            model, trainer = trainer.load(profile.mlp_weights_path, config=config)
+            qc = QuickCalibration(
+                sw, sh,
+                samples_per_target=int(qc_cfg.get("samples_per_target", 60)),
+                target_duration_sec=float(qc_cfg.get("target_duration_sec", 1.0)),
+                points=int(qc_cfg.get("points", 5)),
+                trainer=trainer,
+            )
+            ui = _make_ui()
             ui.start()
 
             def _quick_on_target(tx, ty):
@@ -136,15 +166,22 @@ def main() -> None:
 
     if not args.quick and not done_event.is_set():
         from gaze_estimation.calibration.calibration_engine import CalibrationEngine
+        from gaze_estimation.model.trainer import MLPTrainer
         engine = CalibrationEngine(
             sw, sh,
+            grid_cols=full_grid[0],
+            grid_rows=full_grid[1],
+            samples_per_target=int(cal_cfg.get("samples_per_target", 120)),
+            target_duration_sec=float(cal_cfg.get("target_duration_sec", 2.0)),
+            outlier_sigma=float(cal_cfg.get("outlier_sigma_threshold", 2.0)),
+            mlp_trainer=MLPTrainer.from_config(config),
             camera_matrix=camera_matrix,
             frame_width=cm_w,
             bias_map_cols=bias_cols,
             bias_map_rows=bias_rows,
             bias_map_smoothing=bias_smoothing,
         )
-        ui = CalibrationUI(screen_width=sw, screen_height=sh)
+        ui = _make_ui()
         ui.start()
 
         def _on_target(tx, ty):

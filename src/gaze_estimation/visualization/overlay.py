@@ -41,12 +41,16 @@ class OverlayRenderer:
         draw_iris: bool = True,
         draw_axes: bool = False,
         dot_radius: int = 12,
+        draw_fps: bool = True,
+        draw_latency: bool = True,
         copy: bool = True,
     ) -> None:
         self._draw_mesh = draw_mesh
         self._draw_iris = draw_iris
         self._draw_axes = draw_axes
         self._dot_radius = dot_radius
+        self._draw_fps = draw_fps
+        self._draw_latency = draw_latency
         self._copy = copy
 
     def render(
@@ -96,12 +100,12 @@ class OverlayRenderer:
             cv2.circle(out, (gx, gy), self._dot_radius, self.COLOR_GAZE, -1)
 
         # ── HUD text ───────────────────────────────────────────────────────
-        if fps > 0.0:
+        if self._draw_fps and fps > 0.0:
             cv2.putText(
                 out, f"FPS: {fps:.1f}",
                 (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLOR_FPS, 1, cv2.LINE_AA,
             )
-        if latency_ms > 0.0:
+        if self._draw_latency and latency_ms > 0.0:
             cv2.putText(
                 out, f"Lat: {latency_ms:.1f}ms",
                 (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLOR_FPS, 1, cv2.LINE_AA,

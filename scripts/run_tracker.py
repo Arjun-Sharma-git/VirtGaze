@@ -21,6 +21,10 @@ import cv2
 import numpy as np
 
 WINDOW_NAME = "Gaze Tracker"
+# Throttling for logging.save_debug_frames: at most one frame every 0.5 s and
+# 200 files total, so a long session cannot fill the disk.
+_DEBUG_SAVE_INTERVAL_SEC = 0.5
+_MAX_DEBUG_FRAMES = 200
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,6 +80,18 @@ def main() -> None:
             np.array(profile.camera_intrinsics, dtype=np.float64),
             np.array(profile.dist_coeffs, dtype=np.float64),
         )
+
+    # ── Staleness hint (profile.quick_calib_interval_days) ────────────────
+    if profile is not None:
+        if profile_mgr.needs_quick_calibration(
+            args.user,
+            days_since_last=int(config.get("profile.quick_calib_interval_days", 7)),
+        ):
+            print(
+                "[tracker] Profile is older than "
+                f"{int(config.get('profile.quick_calib_interval_days', 7))} days — "
+                f"consider: python scripts/run_calibration.py --user {args.user} --quick"
+            )
 
     # ── Personalised model ────────────────────────────────────────────────
     model = trainer = None
@@ -164,7 +180,7 @@ def main() -> None:
                     online_trainer.model, trainer,
                     predictor=predictor, backend=backend_name,
                 )
-                if weights_path:
+                if weights_path and bool(config.get("profile.auto_save", True)):
                     try:
                         trainer.save(online_trainer.model, weights_path)
                     except Exception as exc:
@@ -182,7 +198,23 @@ def main() -> None:
     pipeline.start()
 
     # ── Preview window ────────────────────────────────────────────────────
-    renderer = OverlayRenderer(draw_iris=True, draw_mesh=args.debug)
+    log_cfg = config.section("logging")
+    log_fps = bool(log_cfg.get("log_fps", True))
+    log_latency = bool(log_cfg.get("log_latency", True))
+    renderer = OverlayRenderer(
+        draw_iris=True,
+        draw_mesh=args.debug,
+        draw_fps=log_fps,
+        draw_latency=log_latency,
+    )
+    debug_dir = (
+        "debug_frames" if bool(log_cfg.get("save_debug_frames", False)) else None
+    )
+    debug_saved = 0
+    if debug_dir is not None:
+        os.makedirs(debug_dir, exist_ok=True)
+        print(f"[tracker] Saving debug frames to {debug_dir}/ "
+              f"(max {_MAX_DEBUG_FRAMES} @ {1 / _DEBUG_SAVE_INTERVAL_SEC:.0f} fps)")
     pending_clicks: list = []
 
     def _on_mouse(event, x, y, _flags, _param) -> None:
@@ -200,6 +232,7 @@ def main() -> None:
 
     print("[tracker] Running. Press 'q' in the window or Ctrl+C to stop.")
     t_last_fps_print = time.perf_counter()
+    t_last_debug_save = time.perf_counter()
     clicks_used = 0
     try:
         while True:
@@ -228,6 +261,16 @@ def main() -> None:
                     fps=pipeline.fps,
                     latency_ms=estimate.latency_ms if estimate else 0.0,
                 )
+                # ── Optional debug frame dump (logging.save_debug_frames) ──
+                if debug_dir is not None and debug_saved < _MAX_DEBUG_FRAMES:
+                    if time.perf_counter() - t_last_debug_save >= _DEBUG_SAVE_INTERVAL_SEC:
+                        t_last_debug_save = time.perf_counter()
+                        path = os.path.join(debug_dir, f"frame_{debug_saved:06d}.jpg")
+                        try:
+                            cv2.imwrite(path, display)
+                            debug_saved += 1
+                        except Exception as exc:
+                            print(f"[tracker] Could not write debug frame: {exc}")
                 if implicit is not None:
                     # Match the screen resolution so clicks map 1:1 to pixels
                     display = cv2.resize(display, (screen_w, screen_h))
@@ -244,7 +287,7 @@ def main() -> None:
                     if (cv2.waitKey(1) & 0xFF) == ord("q"):
                         break
 
-            if time.perf_counter() - t_last_fps_print > 5.0:
+            if log_fps and time.perf_counter() - t_last_fps_print > 5.0:
                 print(f"[tracker] FPS={pipeline.fps:.1f}")
                 t_last_fps_print = time.perf_counter()
 

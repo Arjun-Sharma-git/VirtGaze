@@ -85,7 +85,8 @@ cp configs/example_config.yaml configs/my_config.yaml
 python scripts/run_tracker.py --config configs/my_config.yaml
 ```
 
-Key configuration sections:
+Key configuration sections (every key below is honoured by the code — see
+`tests/test_config_drift.py`):
 
 ```yaml
 camera:
@@ -93,20 +94,60 @@ camera:
   width: 1280
   height: 720
   fps: 60
-
-inference:
-  backend: "onnx"    # "onnx" | "torch" | "tensorrt"
-  device: "CPU"      # "CPU" | "CUDA" | "ROCm" | "auto"
-  fallback_distance_mm: 600.0
-  geometric_min_confidence: 0.4
-
-camera:
+  auto_exposure: true        # false locks exposure — avoids iris drift mid-session
   undistort: false           # Apply lens-distortion correction
   intrinsics_path: ""        # .npz produced by scripts/calibrate_camera.py
 
+detection:
+  model: "mediapipe_short"   # "mediapipe_short" (≤2 m) | "mediapipe_full" (≤5 m)
+  detection_interval: 5      # full detection every N frames; tracked in between
+  min_confidence: 0.5
+
+mesh:
+  refine_iris: true
+  static_image_mode: false   # true for still images / recordings (slower, live video)
+
+pose:
+  solvepnp_method: "SOLVEPNP_ITERATIVE"   # any cv2.SOLVEPNP_* constant name
+  use_ransac: false                       # solvePnPRansac outlier rejection
+
+inference:
+  backend: "onnx"            # "onnx" | "torch" | "tensorrt"
+  device: "CPU"              # "CPU" | "CUDA" | "ROCm" | "auto"
+                             # also selects the PyTorch training device
+  fallback_to_geometric: true
+  fallback_distance_mm: 600.0
+  geometric_min_confidence: 0.4
+
 mlp:
   hidden_dims: [64, 128, 64]
+  learning_rate: 0.001
+  weight_decay: 0.0001
   epochs: 200
+  batch_size: 32
+  early_stopping_patience: 20
+
+calibration:
+  grid_cols: 5
+  grid_rows: 5
+  samples_per_target: 120
+  target_duration_sec: 2.0
+  pulse_animation: true      # animated target; false = static dot
+  circular_motion: true
+  circular_radius_px: 15
+  outlier_sigma_threshold: 2.0
+
+quick_calibration:
+  points: 5                  # 5 (centre + 4 corners) | 9 (full 3×3 grid)
+
+profile:
+  auto_save: true            # false = run without writing any calibration output
+  quick_calib_interval_days: 7   # staleness hint printed by run_tracker
+
+logging:
+  log_fps: true              # console FPS line + overlay HUD
+  log_latency: true
+  save_debug_frames: false   # dump annotated frames to debug_frames/ (throttled)
 ```
 
 ---
@@ -126,6 +167,20 @@ The exported ONNX/TensorRT graph expects the **normalised** feature vector, so
 feature z-scoring is always applied by the trainer before the backend runs. If a
 requested backend cannot be initialised, the tracker logs a warning and falls
 back to `torch` rather than failing.
+
+### Geometric fallback
+When no personal model is available, or confidence is below
+`inference.geometric_min_confidence`, the gaze angles are projected onto the
+screen plane at `inference.fallback_distance_mm`. Set
+
+```yaml
+inference:
+  fallback_to_geometric: false
+```
+
+to disable that entirely: an unusable model then holds the estimate at the
+screen centre instead of reporting a plausible-looking but uncalibrated point.
+Use this when a wrong-but-confident cursor is worse than no cursor.
 
 ### Spatial bias correction
 During calibration a residual `BiasMap` is built from the model's own
@@ -155,6 +210,11 @@ python scripts/calibrate_camera.py --output data/camera_intrinsics.npz
 # 2. Point camera.intrinsics_path at it and enable undistortion
 #    camera: {undistort: true, intrinsics_path: "data/camera_intrinsics.npz"}
 ```
+
+### Debug frames
+With `logging.save_debug_frames: true` the tracker writes annotated frames to
+`debug_frames/` — at most one every 0.5 s, 200 files total, so a long session
+cannot fill the disk.
 
 ---
 

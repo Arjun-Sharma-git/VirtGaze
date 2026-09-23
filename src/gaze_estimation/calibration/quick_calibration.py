@@ -37,8 +37,14 @@ class QuickCalibration:
         screen_height:      Display height in pixels.
         samples_per_target: Gaze samples per target (default 60).
         target_duration_sec: Seconds per target (default 1.0).
+        points:             Number of calibration targets: 5 (centre + 4
+                            corners) or 9 (3×3 grid).  Anything else falls back
+                            to 5 with a warning.
         trainer:            Trainer with stored normalisation stats.
     """
+
+    # Layouts understood by :meth:`generate_targets`.
+    SUPPORTED_POINTS = (5, 9)
 
     def __init__(
         self,
@@ -46,18 +52,37 @@ class QuickCalibration:
         screen_height: int,
         samples_per_target: int = 60,
         target_duration_sec: float = 1.0,
+        points: int = 5,
         trainer: Optional[MLPTrainer] = None,
     ) -> None:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.samples_per_target = samples_per_target
         self.target_duration_sec = target_duration_sec
+        self.points = int(points)
         self._trainer = trainer or MLPTrainer()
 
     def generate_targets(self) -> List[Tuple[float, float]]:
-        """Return the 5 target positions (centre + 4 corners)."""
+        """Return the target positions for :attr:`points`.
+
+        The 5-point layout is centre + 4 corners at 15 % / 85 % margins (a
+        3×3 grid with the edge midpoints omitted); the 9-point layout is the
+        full 3×3 grid.
+        """
         m = _QUICK_MARGINS
         w, h = self.screen_width, self.screen_height
+
+        if self.points not in self.SUPPORTED_POINTS:
+            _logger.warning(
+                "Unsupported quick_calibration.points=%s — using 5", self.points
+            )
+            self.points = 5
+
+        if self.points == 9:
+            xs = [w * m, w * 0.5, w * (1 - m)]
+            ys = [h * m, h * 0.5, h * (1 - m)]
+            return [(x, y) for y in ys for x in xs]
+
         return [
             (w * 0.5, h * 0.5),          # Centre
             (w * m, h * m),               # Top-left

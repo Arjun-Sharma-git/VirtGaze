@@ -58,8 +58,10 @@ class InferenceStage(StageThread):
     spatial error.
 
     If no model is available (or confidence is too low) the geometric
-    gaze-to-screen projection is used; below that, the estimate holds at the
-    screen centre.
+    gaze-to-screen projection is used, unless
+    ``inference.fallback_to_geometric`` is false — then (and below
+    ``inference.geometric_min_confidence``) the estimate holds at the screen
+    centre.
     """
 
     def __init__(
@@ -95,6 +97,15 @@ class InferenceStage(StageThread):
         self._fallback_distance_mm = float(
             config.get("inference.fallback_distance_mm", 600.0)
         )
+        # When False the geometric projection is never used: an unusable model
+        # or a low-confidence sample holds the estimate at the screen centre.
+        self._fallback_enabled = bool(
+            config.get("inference.fallback_to_geometric", True)
+        )
+        if not self._fallback_enabled:
+            self._logger.info(
+                "Geometric fallback disabled (inference.fallback_to_geometric=false)"
+            )
 
     def set_model(self, model, trainer, predictor=None, backend: str = "torch") -> None:
         """Attach a trained model.
@@ -129,6 +140,10 @@ class InferenceStage(StageThread):
         has_model = self._trainer is not None and (
             self._predictor is not None or self._model is not None
         )
+        # Set when this packet should be projected geometrically.  The model
+        # path may also set it, on failure, so that the fallback still applies
+        # when the model is confident but throws.
+        use_geometric = False
 
         if confidence >= self._conf_threshold and has_model:
             try:
@@ -147,11 +162,16 @@ class InferenceStage(StageThread):
                     screen_x, screen_y = self._clamp(screen_x, screen_y)
             except Exception as exc:
                 self._logger.debug("%s inference failed: %s", self._source_name, exc)
-                source = "geometric"
+                use_geometric = True
 
-        if source == "geometric" or (
-            source == "hold" and confidence >= self._geometric_min_conf
+        if (
+            not use_geometric
+            and source == "hold"
+            and confidence >= self._geometric_min_conf
         ):
+            use_geometric = True
+
+        if use_geometric and self._fallback_enabled:
             # Geometric fallback: project the gaze angles onto the screen plane
             # at the configured viewing distance.  Angles are right/up-positive
             # (see geometry.ray_to_angles), so the screen Y axis is inverted.
@@ -380,6 +400,7 @@ class GazeEstimationPipeline:
         c = cfg.section("camera")
         d = cfg.section("detection")
         m = cfg.section("mesh")
+        p = cfg.section("pose")
 
         if self._source is not None:
             cam_thread: StageThread = self._source
@@ -394,6 +415,7 @@ class GazeEstimationPipeline:
                 camera_matrix=self._camera_matrix,
                 dist_coeffs=self._dist_coeffs,
                 undistort=bool(c.get("undistort", False)),
+                auto_exposure=bool(c.get("auto_exposure", True)),
             )
             self._source = cam_thread
 
@@ -403,6 +425,7 @@ class GazeEstimationPipeline:
             stop_event=self._stop_event,
             detection_interval=int(d.get("detection_interval", 5)),
             min_confidence=float(d.get("min_confidence", 0.5)),
+            model=str(d.get("model", "mediapipe_short")),
         )
 
         mesh_thread = FaceMeshExtractor(
@@ -412,6 +435,7 @@ class GazeEstimationPipeline:
             refine_iris=bool(m.get("refine_iris", True)),
             max_num_faces=int(m.get("max_num_faces", 1)),
             min_detection_confidence=float(m.get("min_detection_confidence", 0.5)),
+            static_image_mode=bool(m.get("static_image_mode", False)),
             tap_queue=self._queues["preview"],
         )
 
@@ -421,6 +445,8 @@ class GazeEstimationPipeline:
             stop_event=self._stop_event,
             camera_matrix=self._camera_matrix,
             dist_coeffs=self._dist_coeffs,
+            solvepnp_method=str(p.get("solvepnp_method", "SOLVEPNP_ITERATIVE")),
+            use_ransac=bool(p.get("use_ransac", False)),
         )
 
         gaze_cfg = cfg.section("gaze")

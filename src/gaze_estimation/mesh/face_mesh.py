@@ -33,6 +33,7 @@ class FaceMeshExtractor(StageThread):
         max_num_faces: int = 1,
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
+        static_image_mode: bool = False,
         tap_queue: Optional[queue.Queue] = None,
         name: str = "mesh_thread",
     ) -> None:
@@ -47,6 +48,9 @@ class FaceMeshExtractor(StageThread):
         self._max_num_faces = max_num_faces
         self._min_det_conf = min_detection_confidence
         self._min_trk_conf = min_tracking_confidence
+        # MediaPipe treats every frame as an unrelated image when enabled:
+        # needed for still images / recordings, slower for live video.
+        self._static_image_mode = static_image_mode
         self._face_mesh = None
 
     # ── StageThread ────────────────────────────────────────────────────────
@@ -59,9 +63,12 @@ class FaceMeshExtractor(StageThread):
                 refine_landmarks=self._refine_iris,
                 min_detection_confidence=self._min_det_conf,
                 min_tracking_confidence=self._min_trk_conf,
+                static_image_mode=self._static_image_mode,
             )
             self._logger.info(
-                "MediaPipe FaceMesh initialised (refine_iris=%s)", self._refine_iris
+                "MediaPipe FaceMesh initialised (refine_iris=%s, static_image_mode=%s)",
+                self._refine_iris,
+                self._static_image_mode,
             )
         except Exception as exc:
             self._logger.error("Could not initialise MediaPipe FaceMesh: %s", exc)
