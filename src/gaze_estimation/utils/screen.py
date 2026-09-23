@@ -25,6 +25,6 @@ def detect_screen_resolution(fallback: Tuple[int, int] = DEFAULT_RESOLUTION) -> 
             return fallback
         monitor = monitors[0]
         return int(monitor.width), int(monitor.height)
-    except Exception as exc:  # pragma: no cover - depends on host display
+    except Exception as exc:
         _logger.warning("Screen detection unavailable (%s); using %s", exc, fallback)
         return fallback
