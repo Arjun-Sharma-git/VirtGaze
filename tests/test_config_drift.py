@@ -10,6 +10,7 @@ accessed *from config* (``.get("key")``, ``["key"]``, or the full dotted path),
 so a same-named constructor parameter or local variable does not hide a key
 that is never actually loaded from YAML.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -21,9 +22,7 @@ import yaml
 from gaze_estimation.config.config import Config
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = (
-    REPO_ROOT / "src" / "gaze_estimation" / "config" / "default_config.yaml"
-)
+DEFAULT_CONFIG = REPO_ROOT / "src" / "gaze_estimation" / "config" / "default_config.yaml"
 CONFIG_DIR = REPO_ROOT / "configs"
 
 # Source trees that are expected to read configuration.  The loader itself
@@ -60,11 +59,7 @@ def _is_read_from_config(dotted: str, texts: dict) -> bool:
         rf'\[\s*["\']{re.escape(leaf)}["\']\s*\]',
         rf'["\']{re.escape(dotted)}["\']',
     )
-    return any(
-        re.search(pattern, text)
-        for text in texts.values()
-        for pattern in patterns
-    )
+    return any(re.search(pattern, text) for text in texts.values() for pattern in patterns)
 
 
 def _load_yaml(path: pathlib.Path) -> dict:
@@ -100,9 +95,7 @@ def test_config_default_matches_yaml_top_level_sections():
     assert set(Config.default().to_dict()) == set(default)
 
 
-@pytest.mark.parametrize(
-    "config_path", sorted(CONFIG_DIR.glob("*.yaml")), ids=lambda p: p.name
-)
+@pytest.mark.parametrize("config_path", sorted(CONFIG_DIR.glob("*.yaml")), ids=lambda p: p.name)
 def test_example_configs_only_override_known_keys(config_path: pathlib.Path):
     """Example configs must not reference keys that no longer exist."""
     known = {".".join(p) for p in _leaf_paths(_load_yaml(DEFAULT_CONFIG))}
@@ -110,8 +103,7 @@ def test_example_configs_only_override_known_keys(config_path: pathlib.Path):
 
     unknown = sorted(example - known)
     assert not unknown, (
-        f"{config_path.name} overrides keys that are not in "
-        f"default_config.yaml: {unknown}"
+        f"{config_path.name} overrides keys that are not in " f"default_config.yaml: {unknown}"
     )
 
 

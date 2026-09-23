@@ -1,4 +1,5 @@
 """QuickCalibration: 5-point recalibration (fine-tune existing MLP)."""
+
 from __future__ import annotations
 
 import queue
@@ -73,9 +74,7 @@ class QuickCalibration:
         w, h = self.screen_width, self.screen_height
 
         if self.points not in self.SUPPORTED_POINTS:
-            _logger.warning(
-                "Unsupported quick_calibration.points=%s — using 5", self.points
-            )
+            _logger.warning("Unsupported quick_calibration.points=%s — using 5", self.points)
             self.points = 5
 
         if self.points == 9:
@@ -84,11 +83,11 @@ class QuickCalibration:
             return [(x, y) for y in ys for x in xs]
 
         return [
-            (w * 0.5, h * 0.5),          # Centre
-            (w * m, h * m),               # Top-left
-            (w * (1 - m), h * m),         # Top-right
-            (w * m, h * (1 - m)),         # Bottom-left
-            (w * (1 - m), h * (1 - m)),   # Bottom-right
+            (w * 0.5, h * 0.5),  # Centre
+            (w * m, h * m),  # Top-left
+            (w * (1 - m), h * m),  # Top-right
+            (w * m, h * (1 - m)),  # Bottom-left
+            (w * (1 - m), h * (1 - m)),  # Bottom-right
         ]
 
     def run(
@@ -157,11 +156,11 @@ class QuickCalibration:
         )
         Y = np.array([[s.screen_x, s.screen_y] for s in all_samples], dtype=np.float32)
 
-        _logger.info(
-            "Fine-tuning MLP on %d quick-calib samples …", len(X)
-        )
+        _logger.info("Fine-tuning MLP on %d quick-calib samples …", len(X))
         model = self._trainer.fine_tune(
-            existing_model, X, Y,
+            existing_model,
+            X,
+            Y,
             epochs=3,
         )
         if mlp_save_path:
@@ -173,9 +172,8 @@ class QuickCalibration:
         )
 
         from gaze_estimation.gaze.kappa_compensation import estimate_kappa
-        kappa_yaw, kappa_pitch = estimate_kappa(
-            all_samples, self.screen_width, self.screen_height
-        )
+
+        kappa_yaw, kappa_pitch = estimate_kappa(all_samples, self.screen_width, self.screen_height)
 
         return CalibrationResult(
             samples=all_samples,

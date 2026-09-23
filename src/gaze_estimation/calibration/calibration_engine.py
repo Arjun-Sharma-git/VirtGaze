@@ -1,4 +1,5 @@
 """CalibrationEngine: orchestrates a 25-point gaze calibration session."""
+
 from __future__ import annotations
 
 import queue
@@ -57,8 +58,9 @@ def build_residual_bias_map(
     )
     return bias_map
 
+
 # Default screen margins as fraction of screen dimensions
-_MARGIN = 0.1   # 10% margin on each side → targets from 10% to 90%
+_MARGIN = 0.1  # 10% margin on each side → targets from 10% to 90%
 
 
 class CalibrationEngine:
@@ -142,9 +144,7 @@ class CalibrationEngine:
 
         n_targets = len(targets)
         for i, (tx, ty) in enumerate(targets):
-            _logger.info(
-                "Target %d/%d  (%.0f, %.0f)", i + 1, n_targets, tx, ty
-            )
+            _logger.info("Target %d/%d  (%.0f, %.0f)", i + 1, n_targets, tx, ty)
             if on_target_change:
                 on_target_change(tx, ty)
 
@@ -161,25 +161,15 @@ class CalibrationEngine:
             if on_progress:
                 on_progress((i + 1) / n_targets)
 
-        _logger.info(
-            "Collected %d total samples from %d targets", len(all_samples), n_targets
-        )
+        _logger.info("Collected %d total samples from %d targets", len(all_samples), n_targets)
 
         # Estimate kappa
-        kappa_yaw, kappa_pitch = estimate_kappa(
-            all_samples, self.screen_width, self.screen_height
-        )
-        _logger.info(
-            "Kappa: yaw=%.2f°  pitch=%.2f°", kappa_yaw, kappa_pitch
-        )
+        kappa_yaw, kappa_pitch = estimate_kappa(all_samples, self.screen_width, self.screen_height)
+        _logger.info("Kappa: yaw=%.2f°  pitch=%.2f°", kappa_yaw, kappa_pitch)
 
         # Fit eyeball radius (needs camera intrinsics for a metric estimate;
         # falls back to the anthropometric default when unavailable)
-        focal_px = (
-            float(self._camera_matrix[0, 0])
-            if self._camera_matrix is not None
-            else None
-        )
+        focal_px = float(self._camera_matrix[0, 0]) if self._camera_matrix is not None else None
         radius = fit_eyeball_radius(
             all_samples,
             focal_length_px=focal_px,
@@ -191,6 +181,7 @@ class CalibrationEngine:
         bias_map = None
         if all_samples:
             from gaze_estimation.pipeline.schemas import FEATURE_KEYS
+
             X = np.array(
                 [[s.features.get(k, 0.0) for k in FEATURE_KEYS] for s in all_samples],
                 dtype=np.float32,
@@ -271,9 +262,7 @@ class CalibrationEngine:
 
         return self._remove_outliers(collected)
 
-    def _remove_outliers(
-        self, samples: List[CalibrationSample]
-    ) -> List[CalibrationSample]:
+    def _remove_outliers(self, samples: List[CalibrationSample]) -> List[CalibrationSample]:
         """Reject samples more than *outlier_sigma* σ from mean gaze angles."""
         if len(samples) < 4:
             return samples
@@ -285,7 +274,8 @@ class CalibrationEngine:
         mean_p, std_p = pitches.mean(), pitches.std()
 
         cleaned = [
-            s for s, y, p in zip(samples, yaws, pitches)
+            s
+            for s, y, p in zip(samples, yaws, pitches)
             if (
                 abs(y - mean_y) <= self.outlier_sigma * (std_y + 1e-6)
                 and abs(p - mean_p) <= self.outlier_sigma * (std_p + 1e-6)

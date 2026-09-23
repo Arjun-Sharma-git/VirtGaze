@@ -1,4 +1,5 @@
 """Online incremental MLP fine-tuner using click-based adaptation samples."""
+
 from __future__ import annotations
 
 from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
@@ -67,9 +68,10 @@ class OnlineTrainer:
             return False
 
         _logger.info(
-            "Fine-tuning MLP on %d adaptation samples "
-            "(%d new) for %d epochs …",
-            len(X), self._buffer.count_new_since_last_train(), self._retrain_epochs,
+            "Fine-tuning MLP on %d adaptation samples " "(%d new) for %d epochs …",
+            len(X),
+            self._buffer.count_new_since_last_train(),
+            self._retrain_epochs,
         )
 
         # Store original settings, override for fine-tune
@@ -83,7 +85,8 @@ class OnlineTrainer:
 
         try:
             self._mlp = self._trainer.train(
-                X, Y,
+                X,
+                Y,
                 screen_width=self._screen_width,
                 screen_height=self._screen_height,
                 existing_model=self._mlp,

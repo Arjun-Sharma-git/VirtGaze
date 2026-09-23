@@ -1,4 +1,5 @@
 """Animated calibration target — pulse + circular motion."""
+
 from __future__ import annotations
 
 import math
@@ -9,11 +10,12 @@ from dataclasses import dataclass
 @dataclass
 class TargetState:
     """Current visual state of the animated calibration target."""
+
     x: float = 0.0
     y: float = 0.0
     radius: float = 20.0
-    alpha: float = 1.0    # Opacity 0-1
-    phase: float = 0.0    # Animation phase 0-1
+    alpha: float = 1.0  # Opacity 0-1
+    phase: float = 0.0  # Animation phase 0-1
 
 
 class CalibrationTarget:

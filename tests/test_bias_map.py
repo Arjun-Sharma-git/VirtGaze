@@ -1,4 +1,5 @@
 """Tests for the spatial BiasMap."""
+
 from __future__ import annotations
 
 import os

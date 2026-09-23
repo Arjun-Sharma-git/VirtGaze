@@ -1,4 +1,5 @@
 """Tests for ProfileManager: CRUD + recalibration logic."""
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,8 @@ def test_save_and_load_profile(tmp_profile_dir):
     dc = np.zeros(5, dtype=np.float64)
     pm.save_calibration(
         user_id="bob",
-        kappa_yaw=2.5, kappa_pitch=-1.0,
+        kappa_yaw=2.5,
+        kappa_pitch=-1.0,
         eyeball_radius=12.0,
         mlp_path="models/bob.pt",
         screen_resolution=(1920, 1080),
@@ -47,8 +49,7 @@ def test_list_profiles(tmp_profile_dir):
     cm = np.eye(3)
     dc = np.zeros(5)
     for uid in ["user1", "user2", "user3"]:
-        pm.save_calibration(uid, 0.0, 0.0, 12.0, "x.pt", (1920, 1080),
-                            "cam", cm, dc, 100)
+        pm.save_calibration(uid, 0.0, 0.0, 12.0, "x.pt", (1920, 1080), "cam", cm, dc, 100)
     profiles = pm.list_profiles()
     assert "user1" in profiles
     assert "user2" in profiles
@@ -64,8 +65,7 @@ def test_needs_recalibration_camera_change(tmp_profile_dir):
     pm = ProfileManager(tmp_profile_dir)
     cm = np.eye(3)
     dc = np.zeros(5)
-    pm.save_calibration("alice", 0.0, 0.0, 12.0, "x.pt", (1920, 1080),
-                        "old_cam", cm, dc, 100)
+    pm.save_calibration("alice", 0.0, 0.0, 12.0, "x.pt", (1920, 1080), "old_cam", cm, dc, 100)
     assert pm.needs_recalibration("alice", "new_cam", (1920, 1080))
 
 
@@ -73,8 +73,7 @@ def test_needs_recalibration_screen_change(tmp_profile_dir):
     pm = ProfileManager(tmp_profile_dir)
     cm = np.eye(3)
     dc = np.zeros(5)
-    pm.save_calibration("carol", 0.0, 0.0, 12.0, "x.pt", (1920, 1080),
-                        "cam", cm, dc, 100)
+    pm.save_calibration("carol", 0.0, 0.0, 12.0, "x.pt", (1920, 1080), "cam", cm, dc, 100)
     assert pm.needs_recalibration("carol", "cam", (2560, 1440))
 
 
@@ -82,7 +81,6 @@ def test_delete_profile(tmp_profile_dir):
     pm = ProfileManager(tmp_profile_dir)
     cm = np.eye(3)
     dc = np.zeros(5)
-    pm.save_calibration("dave", 0.0, 0.0, 12.0, "x.pt", (1920, 1080),
-                        "cam", cm, dc, 100)
+    pm.save_calibration("dave", 0.0, 0.0, 12.0, "x.pt", (1920, 1080), "cam", cm, dc, 100)
     pm.delete_profile("dave")
     assert pm.load_profile("dave") is None

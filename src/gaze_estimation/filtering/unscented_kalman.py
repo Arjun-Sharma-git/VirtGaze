@@ -3,6 +3,7 @@
 State vector: [x, y, vx, vy, ax, ay]  (position, velocity, acceleration)
 Measurement:  [x, y]
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -38,18 +39,18 @@ class UnscentedKalmanFilter:
         kappa: float = 0.0,
     ) -> None:
         n = self.STATE_DIM
-        lam = alpha ** 2 * (n + kappa) - n
+        lam = alpha**2 * (n + kappa) - n
         self._lambda = lam
 
         # Weights
         self._Wm = np.full(2 * n + 1, 1.0 / (2 * (n + lam)))
         self._Wm[0] = lam / (n + lam)
         self._Wc = self._Wm.copy()
-        self._Wc[0] += (1 - alpha ** 2 + beta)
+        self._Wc[0] += 1 - alpha**2 + beta
 
         # State and covariance
         self._x = np.zeros(n)
-        self._P = np.eye(n) * 100.0      # Large initial uncertainty
+        self._P = np.eye(n) * 100.0  # Large initial uncertainty
         self._initialised = False
 
         # Noise matrices
@@ -68,15 +69,11 @@ class UnscentedKalmanFilter:
         one makes it more responsive during saccades.  *scale* is clamped to a
         sane range.
         """
-        scale = float(
-            min(max(scale, _MIN_MEASUREMENT_SCALE), _MAX_MEASUREMENT_SCALE)
-        )
+        scale = float(min(max(scale, _MIN_MEASUREMENT_SCALE), _MAX_MEASUREMENT_SCALE))
         if scale == self._measurement_scale:
             return
         self._measurement_scale = scale
-        self._R = np.eye(self.MEASURE_DIM) * (
-            self._base_measurement_noise * scale
-        )
+        self._R = np.eye(self.MEASURE_DIM) * (self._base_measurement_noise * scale)
 
     @property
     def measurement_scale(self) -> float:
@@ -123,7 +120,7 @@ class UnscentedKalmanFilter:
         sigma = self._sigma_points()
 
         # Map sigma points into measurement space
-        z_sigma = sigma[:2, :]           # Take only x, y rows
+        z_sigma = sigma[:2, :]  # Take only x, y rows
         z_pred = z_sigma @ self._Wm
 
         # Innovation covariance
@@ -187,11 +184,13 @@ class UnscentedKalmanFilter:
     def _motion_model(state: np.ndarray, dt: float) -> np.ndarray:
         """Constant-acceleration motion model."""
         x, y, vx, vy, ax, ay = state
-        return np.array([
-            x + vx * dt + 0.5 * ax * dt ** 2,
-            y + vy * dt + 0.5 * ay * dt ** 2,
-            vx + ax * dt,
-            vy + ay * dt,
-            ax,
-            ay,
-        ])
+        return np.array(
+            [
+                x + vx * dt + 0.5 * ax * dt**2,
+                y + vy * dt + 0.5 * ay * dt**2,
+                vx + ax * dt,
+                vy + ay * dt,
+                ax,
+                ay,
+            ]
+        )

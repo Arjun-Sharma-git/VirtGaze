@@ -1,4 +1,5 @@
 """Base class for all pipeline stage threads."""
+
 from __future__ import annotations
 
 import queue
@@ -20,7 +21,7 @@ def put_or_drop(q: queue.Queue, item: object) -> None:
         q.put_nowait(item)
     except queue.Full:
         try:
-            q.get_nowait()          # Discard oldest
+            q.get_nowait()  # Discard oldest
             q.put_nowait(item)
         except queue.Empty:
             pass

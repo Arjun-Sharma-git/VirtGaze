@@ -1,4 +1,5 @@
 """BiasMap: 2D spatial error-correction grid for gaze predictions."""
+
 from __future__ import annotations
 
 import os

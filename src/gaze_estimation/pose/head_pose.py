@@ -1,4 +1,5 @@
 """Head pose estimation thread using solvePnP on face mesh landmarks."""
+
 from __future__ import annotations
 
 import queue
@@ -93,9 +94,7 @@ class HeadPoseEstimator(StageThread):
 
     # ── Public API ─────────────────────────────────────────────────────────
 
-    def set_camera_intrinsics(
-        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
-    ) -> None:
+    def set_camera_intrinsics(self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray) -> None:
         """Update camera intrinsics at runtime (read per-frame, so this is safe)."""
         self._camera_matrix = camera_matrix.astype(np.float64)
         self._dist_coeffs = dist_coeffs.astype(np.float64)

@@ -1,4 +1,5 @@
 """3D gaze ray computation from iris centres and head pose."""
+
 from __future__ import annotations
 
 import queue
@@ -59,9 +60,7 @@ class GazeGeometryEstimator(StageThread):
         self._kappa_yaw = kappa_yaw
         self._kappa_pitch = kappa_pitch
 
-    def set_camera_intrinsics(
-        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
-    ) -> None:
+    def set_camera_intrinsics(self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray) -> None:
         """Update camera intrinsics at runtime (read per-frame, so this is safe)."""
         self._camera_matrix = camera_matrix.astype(np.float64)
         self._dist_coeffs = dist_coeffs.astype(np.float64)
@@ -141,7 +140,9 @@ class GazeGeometryEstimator(StageThread):
         # Undistort the iris 2D point
         pts = iris_center_2d.reshape(1, 1, 2)
         undistorted = cv2.undistortPoints(
-            pts.astype(np.float64), self._camera_matrix, self._dist_coeffs,
+            pts.astype(np.float64),
+            self._camera_matrix,
+            self._dist_coeffs,
             P=self._camera_matrix,
         )
         ux, uy = undistorted.reshape(2)
@@ -152,9 +153,7 @@ class GazeGeometryEstimator(StageThread):
         cx = self._camera_matrix[0, 2]
         cy = self._camera_matrix[1, 2]
 
-        ray_cam = np.array(
-            [(ux - cx) / fx, (uy - cy) / fy, 1.0], dtype=np.float64
-        )
+        ray_cam = np.array([(ux - cx) / fx, (uy - cy) / fy, 1.0], dtype=np.float64)
         ray_cam = normalize(ray_cam)
 
         # Transform ray from camera frame to head frame

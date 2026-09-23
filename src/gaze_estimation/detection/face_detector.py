@@ -1,4 +1,5 @@
 """Face detection thread using MediaPipe Face Detection."""
+
 from __future__ import annotations
 
 import queue
@@ -35,9 +36,7 @@ def resolve_detection_model(model: str) -> Tuple[str, int]:
     """
     key = str(model).strip().lower()
     if key not in _DETECTION_MODELS:
-        _logger.warning(
-            "Unknown detection.model %r — using %s", model, _DEFAULT_DETECTION_MODEL
-        )
+        _logger.warning("Unknown detection.model %r — using %s", model, _DEFAULT_DETECTION_MODEL)
         key = _DEFAULT_DETECTION_MODEL
     return key, _DETECTION_MODELS[key]
 
@@ -80,16 +79,17 @@ class FaceDetector(StageThread):
         self._min_confidence = min_confidence
         self._model_name, self._model_selection = resolve_detection_model(model)
 
-        self._detector = None           # MediaPipe detector (lazy init in thread)
+        self._detector = None  # MediaPipe detector (lazy init in thread)
         self._frame_counter: int = 0
         self._prev_bbox: Optional[tuple] = None
-        self._tracker = FaceTracker()   # Between-detection ROI tracking
+        self._tracker = FaceTracker()  # Between-detection ROI tracking
 
     # ── StageThread ────────────────────────────────────────────────────────
 
     def _setup(self) -> None:
         try:
             import mediapipe as mp
+
             self._detector = mp.solutions.face_detection.FaceDetection(
                 model_selection=self._model_selection,
                 min_detection_confidence=self._min_confidence,
@@ -176,9 +176,9 @@ class FaceDetector(StageThread):
 
         # Extract key landmarks as (N, 2) pixel array
         kps = det.location_data.relative_keypoints
-        landmarks = np.array(
-            [[kp.x * w, kp.y * h] for kp in kps], dtype=np.float32
-        ) if kps else None
+        landmarks = (
+            np.array([[kp.x * w, kp.y * h] for kp in kps], dtype=np.float32) if kps else None
+        )
 
         return bbox, confidence, landmarks
 
@@ -186,10 +186,11 @@ class FaceDetector(StageThread):
         self, frame: np.ndarray
     ) -> Optional[Tuple[tuple, float, Optional[np.ndarray]]]:
         """Haar-cascade fallback if MediaPipe is not available."""
-        cascade = cv2.CascadeClassifier(
-            # cv2.data exists at runtime but is absent from the OpenCV stubs.
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"  # type: ignore[attr-defined]
-        )
+        # cv2.data exists at runtime but is missing from the OpenCV stubs, so
+        # reach it via getattr (which mypy types as Any).  A trailing
+        # `# type: ignore` would not survive this line being wrapped by black.
+        cascade_path = getattr(cv2, "data").haarcascades + "haarcascade_frontalface_default.xml"
+        cascade = cv2.CascadeClassifier(cascade_path)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
         if len(faces) == 0:

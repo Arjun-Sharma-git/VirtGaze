@@ -1,4 +1,5 @@
 """Camera intrinsics utilities: estimation from frame size and chessboard calibration."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -7,6 +8,7 @@ import cv2
 import numpy as np
 
 # ── Quick estimation ──────────────────────────────────────────────────────────
+
 
 def estimate_camera_matrix(width: int, height: int) -> np.ndarray:
     """Estimate a reasonable pinhole camera matrix from image dimensions.
@@ -20,9 +22,7 @@ def estimate_camera_matrix(width: int, height: int) -> np.ndarray:
     cx = width / 2.0
     cy = height / 2.0
     return np.array(
-        [[focal, 0.0, cx],
-         [0.0, focal, cy],
-         [0.0, 0.0, 1.0]],
+        [[focal, 0.0, cx], [0.0, focal, cy], [0.0, 0.0, 1.0]],
         dtype=np.float64,
     )
 
@@ -33,6 +33,7 @@ def zero_dist_coeffs() -> np.ndarray:
 
 
 # ── Chessboard calibration ────────────────────────────────────────────────────
+
 
 def calibrate_from_images(
     images: list[np.ndarray],
@@ -91,6 +92,7 @@ def calibrate_from_images(
 
 # ── Undistort helpers ─────────────────────────────────────────────────────────
 
+
 def precompute_undistort_maps(
     camera_matrix: np.ndarray,
     dist_coeffs: np.ndarray,
@@ -105,8 +107,12 @@ def precompute_undistort_maps(
         camera_matrix, dist_coeffs, (width, height), 1, (width, height)
     )
     map1, map2 = cv2.initUndistortRectifyMap(
-        camera_matrix, dist_coeffs, None, new_camera_matrix,
-        (width, height), cv2.CV_32FC1,
+        camera_matrix,
+        dist_coeffs,
+        None,
+        new_camera_matrix,
+        (width, height),
+        cv2.CV_32FC1,
     )
     return map1, map2
 
@@ -139,6 +145,7 @@ def undistort_points(
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
+
 
 def save_intrinsics(
     path: str,

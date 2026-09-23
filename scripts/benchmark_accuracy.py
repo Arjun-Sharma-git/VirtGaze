@@ -7,6 +7,7 @@ Usage:
 
 Ground truth CSV columns: timestamp,screen_x,screen_y
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,9 +32,7 @@ def load_ground_truth(path: str) -> List[Tuple[float, float, float]]:
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            rows.append(
-                (float(row["timestamp"]), float(row["screen_x"]), float(row["screen_y"]))
-            )
+            rows.append((float(row["timestamp"]), float(row["screen_x"]), float(row["screen_y"])))
     return rows
 
 
@@ -54,10 +53,7 @@ def match_predictions(predictions, ground_truth):
     gt_ts = np.array([g[0] for g in ground_truth], dtype=np.float64)
     gt_xy = np.array([(g[1], g[2]) for g in ground_truth], dtype=np.float64)
 
-    overlap = (
-        pt.size > 0 and gt_ts.size > 0
-        and pt.max() >= gt_ts.min() and pt.min() <= gt_ts.max()
-    )
+    overlap = pt.size > 0 and gt_ts.size > 0 and pt.max() >= gt_ts.min() and pt.min() <= gt_ts.max()
     if overlap:
         idx = np.array([int(np.argmin(np.abs(pt - ts))) for ts in gt_ts])
     else:

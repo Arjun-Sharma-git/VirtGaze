@@ -1,4 +1,5 @@
 """Primary-monitor resolution detection (best effort, optional dependency)."""
+
 from __future__ import annotations
 
 from typing import Tuple

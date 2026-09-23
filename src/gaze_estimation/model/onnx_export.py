@@ -1,4 +1,5 @@
 """Export a trained GazeMLP to ONNX format."""
+
 from __future__ import annotations
 
 import os

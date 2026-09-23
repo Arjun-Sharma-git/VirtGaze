@@ -1,4 +1,5 @@
 """Tests for click-based implicit calibration wiring."""
+
 from __future__ import annotations
 
 from gaze_estimation.calibration.implicit_calibration import ImplicitCalibration
@@ -13,8 +14,9 @@ class _OnlineTrainer:
         self.retrain_result = False
         self.model = object()
 
-    def feed_click(self, features, x, y, mouse_velocity=0.0,
-                   click_velocity_threshold=500.0) -> None:
+    def feed_click(
+        self, features, x, y, mouse_velocity=0.0, click_velocity_threshold=500.0
+    ) -> None:
         self.fed.append((x, y))
 
     def maybe_retrain(self) -> bool:
@@ -72,8 +74,8 @@ def test_velocity_is_estimated_from_click_history():
     trainer = _OnlineTrainer()
     implicit = ImplicitCalibration(trainer, click_velocity_threshold=1.0)
 
-    implicit.on_click(_features(), 0.0, 0.0)          # establishes the baseline
-    accepted = implicit.on_click(_features(), 1000.0, 0.0)   # huge jump -> skipped
+    implicit.on_click(_features(), 0.0, 0.0)  # establishes the baseline
+    accepted = implicit.on_click(_features(), 1000.0, 0.0)  # huge jump -> skipped
 
     assert accepted is False
     assert len(trainer.fed) == 1

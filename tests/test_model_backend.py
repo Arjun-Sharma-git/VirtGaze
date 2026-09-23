@@ -1,4 +1,5 @@
 """Tests for the inference backend factory."""
+
 from __future__ import annotations
 
 from gaze_estimation.model.backend import VALID_BACKENDS, create_predictor
@@ -35,9 +36,7 @@ def test_unknown_backend_falls_back_to_torch():
 def test_unloadable_model_falls_back_to_torch(tmp_path):
     """A missing/invalid model file must degrade gracefully, not raise."""
     for backend in ("onnx", "tensorrt"):
-        predictor, name = create_predictor(
-            backend, model_path=str(tmp_path / "missing-model")
-        )
+        predictor, name = create_predictor(backend, model_path=str(tmp_path / "missing-model"))
         assert predictor is None
         assert name == "torch"
 

@@ -1,4 +1,5 @@
 """Configuration loader: YAML -> Config object with dot-key access."""
+
 from __future__ import annotations
 
 import os

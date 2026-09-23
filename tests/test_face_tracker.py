@@ -1,4 +1,5 @@
 """Tests for face ROI tracking (FaceTracker + FaceDetector integration)."""
+
 from __future__ import annotations
 
 import queue
@@ -66,7 +67,7 @@ def test_detector_tracks_between_full_detections(monkeypatch):
     for i in range(5):
         detector.process(FramePacket(timestamp=float(i), frame=_frame(), frame_id=i))
 
-    assert calls["full"] == 1                     # only the first frame detects
+    assert calls["full"] == 1  # only the first frame detects
     assert len(emitted) == 5
     assert all(p.face_bbox is not None for p in emitted)
     assert emitted[0].detection_confidence == pytest.approx(0.9)
@@ -89,7 +90,7 @@ def test_detector_resets_tracker_when_face_is_lost(monkeypatch):
 
     assert emitted[0].face_bbox is None
     assert emitted[0].detection_confidence == 0.0
-    assert detector._tracker._hist is None        # tracker state dropped
+    assert detector._tracker._hist is None  # tracker state dropped
 
 
 def test_detector_ignores_non_frame_packets():
@@ -98,4 +99,4 @@ def test_detector_ignores_non_frame_packets():
         output_queue=queue.Queue(),
         stop_event=threading.Event(),
     )
-    detector.process("not a frame packet")        # must not raise
+    detector.process("not a frame packet")  # must not raise

@@ -1,4 +1,5 @@
 """Fixation / saccade / blink state machine."""
+
 from __future__ import annotations
 
 import time
@@ -42,7 +43,7 @@ class FixationDetector:
         self._prev_x: Optional[float] = None
         self._prev_y: Optional[float] = None
         self._prev_t: Optional[float] = None
-        self._fix_points: list = []   # Accumulate positions for centroid
+        self._fix_points: list = []  # Accumulate positions for centroid
 
     def update(
         self,

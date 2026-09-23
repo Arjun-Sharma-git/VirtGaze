@@ -1,4 +1,5 @@
 """Tests for FeatureExtractor: correct keys, no NaN, proper normalisation."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -57,10 +58,13 @@ def test_extract_no_nan(extractor, mock_mesh_468, mock_head_pose):
 def test_extract_confidence_stored(extractor, mock_mesh_468, mock_head_pose):
     feats = extractor.extract(
         mesh_468=mock_mesh_468,
-        left_iris_center=None, right_iris_center=None,
-        left_iris_radius=None, right_iris_radius=None,
+        left_iris_center=None,
+        right_iris_center=None,
+        left_iris_radius=None,
+        right_iris_radius=None,
         head_pose=None,
-        gaze_ray_left=None, gaze_ray_right=None,
+        gaze_ray_left=None,
+        gaze_ray_right=None,
         frame_shape=(480, 640, 3),
         face_bbox=None,
         confidence=0.77,
@@ -73,9 +77,11 @@ def test_to_vector(extractor, mock_mesh_468, mock_head_pose):
         mesh_468=mock_mesh_468,
         left_iris_center=(320.0, 240.0),
         right_iris_center=(290.0, 235.0),
-        left_iris_radius=15.0, right_iris_radius=14.5,
+        left_iris_radius=15.0,
+        right_iris_radius=14.5,
         head_pose=mock_head_pose,
-        gaze_ray_left=None, gaze_ray_right=None,
+        gaze_ray_left=None,
+        gaze_ray_right=None,
         frame_shape=(480, 640, 3),
         face_bbox=None,
         confidence=1.0,

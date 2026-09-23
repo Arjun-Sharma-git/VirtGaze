@@ -10,6 +10,7 @@ deliberate left-click in the (fullscreen) preview window is treated as a
 gaze-directed click and used to fine-tune the personalised model in the
 background.  The window is fullscreen so mouse coordinates match screen pixels.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,13 +30,17 @@ _MAX_DEBUG_FRAMES = 200
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Real-time 3D gaze tracker")
-    p.add_argument("--config", default="configs/example_config.yaml",
-                   help="Path to YAML config file")
+    p.add_argument(
+        "--config", default="configs/example_config.yaml", help="Path to YAML config file"
+    )
     p.add_argument("--user", default="default", help="User profile ID")
     p.add_argument("--debug", action="store_true", help="Draw face mesh in the overlay")
     p.add_argument("--no-display", action="store_true", help="Suppress the preview window")
-    p.add_argument("--implicit-calibration", action="store_true",
-                   help="Enable click-based online adaptation (fullscreen window)")
+    p.add_argument(
+        "--implicit-calibration",
+        action="store_true",
+        help="Enable click-based online adaptation (fullscreen window)",
+    )
     return p.parse_args()
 
 
@@ -58,12 +63,8 @@ def main() -> None:
     setup_logging(level=str(config.get("logging.level", "INFO")))
 
     screen_w, screen_h = detect_screen_resolution()
-    profile_mgr = ProfileManager(
-        profiles_dir=str(config.get("profile.profiles_dir", "profiles"))
-    )
-    pipeline = GazeEstimationPipeline(
-        config=config, screen_width=screen_w, screen_height=screen_h
-    )
+    profile_mgr = ProfileManager(profiles_dir=str(config.get("profile.profiles_dir", "profiles")))
+    pipeline = GazeEstimationPipeline(config=config, screen_width=screen_w, screen_height=screen_h)
 
     # ── Camera intrinsics (chessboard file, else the stored profile) ──────
     intrinsics_path = str(config.get("camera.intrinsics_path", "") or "")
@@ -112,12 +113,12 @@ def main() -> None:
         backend = str(config.get("inference.backend", "torch")).lower()
         model_path = None
         if backend == "onnx":
-            model_path = (
-                profile.onnx_model_path or profile_mgr.get_profile_onnx_path(args.user)
-            )
+            model_path = profile.onnx_model_path or profile_mgr.get_profile_onnx_path(args.user)
             if not os.path.exists(model_path):
-                print(f"[tracker] ONNX model not found at {model_path} "
-                      "(export it with scripts/export_model.py)")
+                print(
+                    f"[tracker] ONNX model not found at {model_path} "
+                    "(export it with scripts/export_model.py)"
+                )
         elif backend == "tensorrt":
             model_path = str(config.get("inference.tensorrt_engine_path", "")) or None
 
@@ -145,8 +146,10 @@ def main() -> None:
             except Exception as exc:
                 print(f"[tracker] Could not load bias map: {exc}")
     else:
-        print(f"[tracker] No calibration profile for '{args.user}'. "
-              f"Run: python scripts/run_calibration.py --user {args.user}")
+        print(
+            f"[tracker] No calibration profile for '{args.user}'. "
+            f"Run: python scripts/run_calibration.py --user {args.user}"
+        )
 
     # ── Optional implicit (click-based) calibration ───────────────────────
     online_trainer = None
@@ -159,9 +162,7 @@ def main() -> None:
             from gaze_estimation.adaptation.online_trainer import OnlineTrainer
             from gaze_estimation.calibration.implicit_calibration import ImplicitCalibration
 
-            buffer = AdaptationBuffer(
-                max_size=int(config.get("adaptation.buffer_max_size", 5000))
-            )
+            buffer = AdaptationBuffer(max_size=int(config.get("adaptation.buffer_max_size", 5000)))
             online_trainer = OnlineTrainer(
                 model,
                 buffer,
@@ -177,8 +178,10 @@ def main() -> None:
             def _on_retrain() -> None:
                 """Publish the fine-tuned model and persist its weights."""
                 pipeline.set_model(
-                    online_trainer.model, trainer,
-                    predictor=predictor, backend=backend_name,
+                    online_trainer.model,
+                    trainer,
+                    predictor=predictor,
+                    backend=backend_name,
                 )
                 if weights_path and bool(config.get("profile.auto_save", True)):
                     try:
@@ -207,14 +210,14 @@ def main() -> None:
         draw_fps=log_fps,
         draw_latency=log_latency,
     )
-    debug_dir = (
-        "debug_frames" if bool(log_cfg.get("save_debug_frames", False)) else None
-    )
+    debug_dir = "debug_frames" if bool(log_cfg.get("save_debug_frames", False)) else None
     debug_saved = 0
     if debug_dir is not None:
         os.makedirs(debug_dir, exist_ok=True)
-        print(f"[tracker] Saving debug frames to {debug_dir}/ "
-              f"(max {_MAX_DEBUG_FRAMES} @ {1 / _DEBUG_SAVE_INTERVAL_SEC:.0f} fps)")
+        print(
+            f"[tracker] Saving debug frames to {debug_dir}/ "
+            f"(max {_MAX_DEBUG_FRAMES} @ {1 / _DEBUG_SAVE_INTERVAL_SEC:.0f} fps)"
+        )
     pending_clicks: list = []
 
     def _on_mouse(event, x, y, _flags, _param) -> None:
@@ -225,9 +228,7 @@ def main() -> None:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
         if args.implicit_calibration:
             # Fullscreen so window pixels == screen pixels for click targets
-            cv2.setWindowProperty(
-                WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
-            )
+            cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.setMouseCallback(WINDOW_NAME, _on_mouse)
 
     print("[tracker] Running. Press 'q' in the window or Ctrl+C to stop.")
@@ -274,10 +275,16 @@ def main() -> None:
                 if implicit is not None:
                     # Match the screen resolution so clicks map 1:1 to pixels
                     display = cv2.resize(display, (screen_w, screen_h))
-                    info = (f"clicks={clicks_used} accepted  "
-                            f"retrains={implicit.retrain_count}")
-                    cv2.putText(display, info, (10, display.shape[0] - 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 255), 2)
+                    info = f"clicks={clicks_used} accepted  " f"retrains={implicit.retrain_count}"
+                    cv2.putText(
+                        display,
+                        info,
+                        (10, display.shape[0] - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 220, 255),
+                        2,
+                    )
                 try:
                     cv2.imshow(WINDOW_NAME, display)
                 except cv2.error as exc:
@@ -299,9 +306,11 @@ def main() -> None:
         pipeline.stop()
         cv2.destroyAllWindows()
         if implicit is not None:
-            print(f"[tracker] Implicit calibration: {implicit.total_clicks} clicks "
-                  f"accepted, {implicit.skipped_clicks} skipped, "
-                  f"{implicit.retrain_count} fine-tunes")
+            print(
+                f"[tracker] Implicit calibration: {implicit.total_clicks} clicks "
+                f"accepted, {implicit.skipped_clicks} skipped, "
+                f"{implicit.retrain_count} fine-tunes"
+            )
         print("[tracker] Stopped.")
 
 

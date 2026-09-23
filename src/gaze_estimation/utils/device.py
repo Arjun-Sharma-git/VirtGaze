@@ -1,4 +1,5 @@
 """Device detection and selection utilities for CPU / CUDA / ROCm."""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -44,6 +45,7 @@ def get_torch_device(requested: str = "CPU") -> torch.device:
         if torch.cuda.is_available():
             return torch.device("cuda")
         import warnings
+
         warnings.warn(
             f"Requested device '{requested}' but CUDA/ROCm is not available. "
             "Falling back to CPU.",
@@ -59,6 +61,7 @@ def is_rocm() -> bool:
     """Return True if the installed PyTorch was built with ROCm / HIP."""
     try:
         import torch
+
         return torch.version.hip is not None  # type: ignore[attr-defined]
     except Exception:
         return False
@@ -68,6 +71,7 @@ def is_cuda() -> bool:
     """Return True if CUDA is available (also True on ROCm systems)."""
     try:
         import torch
+
         return torch.cuda.is_available()
     except Exception:
         return False
@@ -77,6 +81,7 @@ def describe_device() -> str:
     """Return a human-readable description of the best available device."""
     try:
         import torch
+
         if not torch.cuda.is_available():
             return "CPU"
         n = torch.cuda.device_count()
@@ -117,6 +122,7 @@ def get_onnx_providers(device: str = "CPU") -> list[str]:
         # Probe available providers
         try:
             import onnxruntime as ort
+
             available = ort.get_available_providers()
             if "ROCMExecutionProvider" in available:
                 return ["ROCMExecutionProvider", "CPUExecutionProvider"]
@@ -133,6 +139,7 @@ def best_device_string() -> str:
     """Return "ROCM", "CUDA", or "CPU" based on available hardware."""
     try:
         import torch
+
         if torch.cuda.is_available():
             if is_rocm():
                 return "ROCM"

@@ -1,4 +1,5 @@
 """GazeMLP: tiny personalized MLP that maps 34 features -> (screen_x, screen_y)."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Optional
@@ -42,7 +43,7 @@ class GazeMLP(nn.Module):
             layers.append(nn.BatchNorm1d(h))
             prev = h
         layers.append(nn.Linear(prev, 2))
-        layers.append(nn.Sigmoid())   # Output in [0, 1]
+        layers.append(nn.Sigmoid())  # Output in [0, 1]
 
         self.net = nn.Sequential(*layers)
         self.input_dim = input_dim

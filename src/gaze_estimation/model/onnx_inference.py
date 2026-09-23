@@ -1,4 +1,5 @@
 """ONNX Runtime inference wrapper — supports CPU, CUDA, and ROCm."""
+
 from __future__ import annotations
 
 import os
@@ -39,9 +40,7 @@ class ONNXInference:
             filtered_providers = ["CPUExecutionProvider"]
 
         session_opts = ort.SessionOptions()
-        session_opts.graph_optimization_level = (
-            ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        )
+        session_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         n_cores = os.cpu_count() or 1
         session_opts.intra_op_num_threads = n_cores
 
@@ -80,9 +79,9 @@ class ONNXInference:
         ``trainer.features_dict_to_vector(features)`` followed by
         :meth:`predict`, which applies them automatically.
         """
-        raw = np.array(
-            [features_dict.get(k, 0.0) for k in feature_keys], dtype=np.float32
-        ).reshape(1, -1)
+        raw = np.array([features_dict.get(k, 0.0) for k in feature_keys], dtype=np.float32).reshape(
+            1, -1
+        )
         if mean is not None and std is not None:
             # Keep the result float32.  The ONNX graph's input is float32, and
             # dividing by a float64 std would silently promote the array, which

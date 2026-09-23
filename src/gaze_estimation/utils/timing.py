@@ -1,4 +1,5 @@
 """FPS counter and per-stage latency profiler."""
+
 from __future__ import annotations
 
 import time

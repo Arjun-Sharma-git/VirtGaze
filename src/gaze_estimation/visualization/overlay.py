@@ -1,4 +1,5 @@
 """OverlayRenderer: draws gaze point, face mesh, and debug info on BGR frames."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -23,16 +24,16 @@ class OverlayRenderer:
     """
 
     # Colours (BGR)
-    COLOR_GAZE = (0, 255, 0)       # Green  — gaze dot
-    COLOR_GAZE_RAW = (0, 150, 255) # Orange — raw (pre-filter) projection
-    COLOR_MESH = (80, 80, 80)      # Dark gray — mesh
-    COLOR_IRIS = (255, 100, 50)    # Blue-ish — iris circle
+    COLOR_GAZE = (0, 255, 0)  # Green  — gaze dot
+    COLOR_GAZE_RAW = (0, 150, 255)  # Orange — raw (pre-filter) projection
+    COLOR_MESH = (80, 80, 80)  # Dark gray — mesh
+    COLOR_IRIS = (255, 100, 50)  # Blue-ish — iris circle
     COLOR_FPS = (200, 200, 50)
     COLOR_STATE = {
         GazeState.FIXATION: (0, 220, 0),
-        GazeState.SACCADE:  (0, 100, 255),
-        GazeState.BLINK:    (0, 0, 220),
-        GazeState.LOST:     (100, 100, 100),
+        GazeState.SACCADE: (0, 100, 255),
+        GazeState.BLINK: (0, 0, 220),
+        GazeState.LOST: (100, 100, 100),
     }
 
     def __init__(
@@ -81,7 +82,8 @@ class OverlayRenderer:
                         out,
                         (int(center[0]), int(center[1])),
                         int(max(radius, 1)),
-                        self.COLOR_IRIS, 1,
+                        self.COLOR_IRIS,
+                        1,
                     )
 
         # ── Gaze point overlay (on the camera preview frame) ───────────────
@@ -102,20 +104,38 @@ class OverlayRenderer:
         # ── HUD text ───────────────────────────────────────────────────────
         if self._draw_fps and fps > 0.0:
             cv2.putText(
-                out, f"FPS: {fps:.1f}",
-                (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLOR_FPS, 1, cv2.LINE_AA,
+                out,
+                f"FPS: {fps:.1f}",
+                (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                self.COLOR_FPS,
+                1,
+                cv2.LINE_AA,
             )
         if self._draw_latency and latency_ms > 0.0:
             cv2.putText(
-                out, f"Lat: {latency_ms:.1f}ms",
-                (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLOR_FPS, 1, cv2.LINE_AA,
+                out,
+                f"Lat: {latency_ms:.1f}ms",
+                (10, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                self.COLOR_FPS,
+                1,
+                cv2.LINE_AA,
             )
         if estimate is not None:
             state_txt = estimate.fixation_state.value if estimate.fixation_state else "–"
             conf_txt = f"Conf: {estimate.confidence:.2f}  State: {state_txt}"
             cv2.putText(
-                out, conf_txt,
-                (10, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA,
+                out,
+                conf_txt,
+                (10, 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (200, 200, 200),
+                1,
+                cv2.LINE_AA,
             )
 
         return out

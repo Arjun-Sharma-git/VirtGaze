@@ -1,4 +1,5 @@
 """3D geometry helpers: vector math, Euler conversions, ray-plane intersection."""
+
 from __future__ import annotations
 
 import math
@@ -6,6 +7,7 @@ import math
 import numpy as np
 
 # ── Rotation matrix utilities ────────────────────────────────────────────────
+
 
 def rotation_matrix_to_euler(R: np.ndarray) -> np.ndarray:
     """Convert a 3x3 rotation matrix to [yaw, pitch, roll] in degrees.
@@ -41,19 +43,20 @@ def euler_to_rotation_matrix(yaw_deg: float, pitch_deg: float, roll_deg: float) 
     p = math.radians(pitch_deg)
     r = math.radians(roll_deg)
 
-    Rz = np.array([[math.cos(y), -math.sin(y), 0],
-                   [math.sin(y),  math.cos(y), 0],
-                   [0, 0, 1]], dtype=np.float64)
-    Ry = np.array([[math.cos(p), 0, math.sin(p)],
-                   [0, 1, 0],
-                   [-math.sin(p), 0, math.cos(p)]], dtype=np.float64)
-    Rx = np.array([[1, 0, 0],
-                   [0, math.cos(r), -math.sin(r)],
-                   [0, math.sin(r),  math.cos(r)]], dtype=np.float64)
+    Rz = np.array(
+        [[math.cos(y), -math.sin(y), 0], [math.sin(y), math.cos(y), 0], [0, 0, 1]], dtype=np.float64
+    )
+    Ry = np.array(
+        [[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, math.cos(p)]], dtype=np.float64
+    )
+    Rx = np.array(
+        [[1, 0, 0], [0, math.cos(r), -math.sin(r)], [0, math.sin(r), math.cos(r)]], dtype=np.float64
+    )
     return Rz @ Ry @ Rx
 
 
 # ── Ray utilities ────────────────────────────────────────────────────────────
+
 
 def ray_to_angles(direction: np.ndarray) -> tuple[float, float]:
     """Convert a 3D unit direction vector to (yaw, pitch) in degrees.
@@ -87,6 +90,7 @@ def normalize(v: np.ndarray) -> np.ndarray:
 
 # ── Ray-plane intersection ───────────────────────────────────────────────────
 
+
 def ray_plane_intersection(
     ray_origin: np.ndarray,
     ray_direction: np.ndarray,
@@ -105,6 +109,7 @@ def ray_plane_intersection(
 
 
 # ── Angular / metric conversions ─────────────────────────────────────────────
+
 
 def screen_to_angles(
     screen_x: float,
@@ -136,13 +141,16 @@ def angular_error_deg(
     pred_yaw: float, pred_pitch: float, true_yaw: float, true_pitch: float
 ) -> float:
     """Compute the angular error between two gaze directions in degrees."""
+
     def to_vec(y_deg: float, p_deg: float) -> np.ndarray:
         y, p = math.radians(y_deg), math.radians(p_deg)
-        return np.array([
-            math.cos(p) * math.cos(y),
-            math.cos(p) * math.sin(y),
-            math.sin(p),
-        ])
+        return np.array(
+            [
+                math.cos(p) * math.cos(y),
+                math.cos(p) * math.sin(y),
+                math.sin(p),
+            ]
+        )
 
     pred_vec = to_vec(pred_yaw, pred_pitch)
     true_vec = to_vec(true_yaw, true_pitch)
@@ -152,6 +160,7 @@ def angular_error_deg(
 
 
 # ── Eye aspect ratio ─────────────────────────────────────────────────────────
+
 
 def eye_aspect_ratio(landmarks: np.ndarray, eye_indices: list) -> float:
     """Compute eye aspect ratio (EAR) for blink / openness detection.
@@ -170,6 +179,7 @@ def eye_aspect_ratio(landmarks: np.ndarray, eye_indices: list) -> float:
 
 # ── Circle fitting ───────────────────────────────────────────────────────────
 
+
 def fit_circle(points: np.ndarray) -> tuple[float, float, float]:
     """Fit a circle to a set of 2D points using algebraic least-squares.
 
@@ -178,8 +188,8 @@ def fit_circle(points: np.ndarray) -> tuple[float, float, float]:
     x = points[:, 0].astype(np.float64)
     y = points[:, 1].astype(np.float64)
     A = np.column_stack([2 * x, 2 * y, np.ones(len(x))])
-    b = x ** 2 + y ** 2
+    b = x**2 + y**2
     result, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
     cx, cy, c = result
-    radius = math.sqrt(max(cx ** 2 + cy ** 2 + c, 0.0))
+    radius = math.sqrt(max(cx**2 + cy**2 + c, 0.0))
     return float(cx), float(cy), float(radius)

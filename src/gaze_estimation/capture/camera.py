@@ -1,4 +1,5 @@
 """Webcam capture thread: reads frames and pushes FramePackets to output queue."""
+
 from __future__ import annotations
 
 import queue
@@ -48,7 +49,7 @@ class CameraCapture(StageThread):
         name: str = "camera_thread",
     ) -> None:
         super().__init__(
-            input_queue=None,          # Source stage — no input queue
+            input_queue=None,  # Source stage — no input queue
             output_queue=output_queue,
             stop_event=stop_event,
             name=name,
@@ -63,8 +64,7 @@ class CameraCapture(StageThread):
 
         # Camera intrinsics (used downstream)
         self._camera_matrix = (
-            camera_matrix if camera_matrix is not None
-            else estimate_camera_matrix(width, height)
+            camera_matrix if camera_matrix is not None else estimate_camera_matrix(width, height)
         )
         self._dist_coeffs = dist_coeffs if dist_coeffs is not None else zero_dist_coeffs()
 
@@ -91,13 +91,9 @@ class CameraCapture(StageThread):
         ok, frame = self._cap.read()
         if not ok or frame is None:
             self._failure_count += 1
-            self._logger.warning(
-                "Camera read failed (count=%d)", self._failure_count
-            )
+            self._logger.warning("Camera read failed (count=%d)", self._failure_count)
             if self._failure_count >= _MAX_CONSECUTIVE_FAILURES:
-                self._logger.error(
-                    "Too many consecutive failures — attempting reconnect"
-                )
+                self._logger.error("Too many consecutive failures — attempting reconnect")
                 self._attempt_reconnect()
             return
 
@@ -118,9 +114,7 @@ class CameraCapture(StageThread):
         """Return (camera_matrix, dist_coeffs)."""
         return self._camera_matrix, self._dist_coeffs
 
-    def set_camera_intrinsics(
-        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
-    ) -> None:
+    def set_camera_intrinsics(self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray) -> None:
         """Update camera intrinsics (e.g. after chessboard calibration).
 
         Rebuilds the undistortion maps when distortion removal is enabled.
@@ -194,8 +188,12 @@ class CameraCapture(StageThread):
         actual_fps = cap.get(cv2.CAP_PROP_FPS)
         self._logger.info(
             "Camera opened: %dx%d @ %.0f FPS (requested %dx%d @ %d)",
-            actual_w, actual_h, actual_fps,
-            self._width, self._height, self._target_fps,
+            actual_w,
+            actual_h,
+            actual_fps,
+            self._width,
+            self._height,
+            self._target_fps,
         )
 
         # Re-estimate intrinsics if resolution changed
@@ -212,9 +210,7 @@ class CameraCapture(StageThread):
             self._cap = None
 
     def _attempt_reconnect(self) -> None:
-        self._logger.info(
-            "Reconnecting to camera in %.1fs …", _RECONNECT_DELAY_SEC
-        )
+        self._logger.info("Reconnecting to camera in %.1fs …", _RECONNECT_DELAY_SEC)
         self._release()
         time.sleep(_RECONNECT_DELAY_SEC)
         self._open_camera()

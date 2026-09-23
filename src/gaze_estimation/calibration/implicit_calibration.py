@@ -1,4 +1,5 @@
 """ImplicitCalibration: accumulate click-based gaze-cursor pairs for online adaptation."""
+
 from __future__ import annotations
 
 import time
@@ -65,11 +66,16 @@ class ImplicitCalibration:
         now = time.monotonic()
 
         # Compute velocity from history if not provided
-        if mouse_velocity is None and self._prev_cursor is not None and self._prev_cursor_time is not None:
+        if (
+            mouse_velocity is None
+            and self._prev_cursor is not None
+            and self._prev_cursor_time is not None
+        ):
             dt = now - self._prev_cursor_time
             dx = cursor_x - self._prev_cursor[0]
             dy = cursor_y - self._prev_cursor[1]
             import math
+
             mouse_velocity = math.hypot(dx, dy) / max(dt, 1e-6)
 
         self._prev_cursor = (cursor_x, cursor_y)
@@ -82,7 +88,9 @@ class ImplicitCalibration:
 
         self._total_clicks += 1
         self._trainer.feed_click(
-            gaze_features, cursor_x, cursor_y,
+            gaze_features,
+            cursor_x,
+            cursor_y,
             mouse_velocity=mouse_velocity or 0.0,
             click_velocity_threshold=self._click_vel_threshold,
         )
@@ -94,7 +102,9 @@ class ImplicitCalibration:
             _logger.info(
                 "Implicit calibration triggered fine-tune "
                 "(total clicks=%d, skipped=%d, retrains=%d)",
-                self._total_clicks, self._skipped_clicks, self._retrain_count,
+                self._total_clicks,
+                self._skipped_clicks,
+                self._retrain_count,
             )
             if self._on_retrain is not None:
                 try:

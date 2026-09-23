@@ -1,4 +1,5 @@
 """GazeEstimationPipeline: full end-to-end pipeline orchestrator."""
+
 from __future__ import annotations
 
 import math
@@ -107,27 +108,19 @@ class InferenceStage(StageThread):
         self._config = config
         self._screen_width = screen_width
         self._screen_height = screen_height
-        self._model: Optional[_ModelLike] = None        # Torch GazeMLP
-        self._trainer: Optional[_TrainerLike] = None    # Feature normalisation stats
+        self._model: Optional[_ModelLike] = None  # Torch GazeMLP
+        self._trainer: Optional[_TrainerLike] = None  # Feature normalisation stats
         self._predictor: Optional[_PredictorLike] = None  # ONNX / TensorRT backend
-        self._source_name = "mlp"     # Reported in GazeEstimate.source
-        self._bias_map = None         # Optional BiasMap spatial correction
+        self._source_name = "mlp"  # Reported in GazeEstimate.source
+        self._bias_map = None  # Optional BiasMap spatial correction
         self._conf_threshold = float(config.get("inference.confidence_threshold", 0.7))
-        self._geometric_min_conf = float(
-            config.get("inference.geometric_min_confidence", 0.4)
-        )
-        self._fallback_distance_mm = float(
-            config.get("inference.fallback_distance_mm", 600.0)
-        )
+        self._geometric_min_conf = float(config.get("inference.geometric_min_confidence", 0.4))
+        self._fallback_distance_mm = float(config.get("inference.fallback_distance_mm", 600.0))
         # When False the geometric projection is never used: an unusable model
         # or a low-confidence sample holds the estimate at the screen centre.
-        self._fallback_enabled = bool(
-            config.get("inference.fallback_to_geometric", True)
-        )
+        self._fallback_enabled = bool(config.get("inference.fallback_to_geometric", True))
         if not self._fallback_enabled:
-            self._logger.info(
-                "Geometric fallback disabled (inference.fallback_to_geometric=false)"
-            )
+            self._logger.info("Geometric fallback disabled (inference.fallback_to_geometric=false)")
 
     def set_model(self, model, trainer, predictor=None, backend: str = "torch") -> None:
         """Attach a trained model.
@@ -172,13 +165,13 @@ class InferenceStage(StageThread):
         use_geometric = False
 
         if confidence >= self._conf_threshold and has_model:
-            assert trainer is not None          # implied by has_model
+            assert trainer is not None  # implied by has_model
             try:
                 x_norm = trainer.features_dict_to_vector(item.features)
                 if predictor is not None:
                     out = predictor.predict(x_norm)
                 else:
-                    assert model is not None    # implied by has_model
+                    assert model is not None  # implied by has_model
                     out = model.predict_numpy(x_norm)
                 screen_x = float(out[0, 0]) * self._screen_width
                 screen_y = float(out[0, 1]) * self._screen_height
@@ -192,11 +185,7 @@ class InferenceStage(StageThread):
                 self._logger.debug("%s inference failed: %s", self._source_name, exc)
                 use_geometric = True
 
-        if (
-            not use_geometric
-            and source == "hold"
-            and confidence >= self._geometric_min_conf
-        ):
+        if not use_geometric and source == "hold" and confidence >= self._geometric_min_conf:
             use_geometric = True
 
         if use_geometric and self._fallback_enabled:
@@ -204,12 +193,8 @@ class InferenceStage(StageThread):
             # at the configured viewing distance.  Angles are right/up-positive
             # (see geometry.ray_to_angles), so the screen Y axis is inverted.
             dist = self._fallback_distance_mm
-            screen_x = (
-                self._screen_width / 2 + math.tan(math.radians(item.gaze_yaw)) * dist
-            )
-            screen_y = (
-                self._screen_height / 2 - math.tan(math.radians(item.gaze_pitch)) * dist
-            )
+            screen_x = self._screen_width / 2 + math.tan(math.radians(item.gaze_yaw)) * dist
+            screen_y = self._screen_height / 2 - math.tan(math.radians(item.gaze_pitch)) * dist
             screen_x, screen_y = self._clamp(screen_x, screen_y)
             source = "geometric"
 
@@ -370,9 +355,7 @@ class GazeEstimationPipeline:
         # GazePacket it produces onto this queue, so calibration reads an
         # independent stream instead of competing with inference for
         # ``_queues["gaze"]``.
-        self._queues["calibration"] = queue.Queue(
-            maxsize=self.CALIBRATION_QUEUE_MAXSIZE
-        )
+        self._queues["calibration"] = queue.Queue(maxsize=self.CALIBRATION_QUEUE_MAXSIZE)
         # Preview tap: the newest MeshPacket (frame + mesh + iris), used by the
         # tracker's live overlay window.
         self._queues["preview"] = queue.Queue(maxsize=self.PREVIEW_QUEUE_MAXSIZE)
@@ -535,8 +518,13 @@ class GazeEstimationPipeline:
         self._collector = collector
 
         self._stages = [
-            cam_thread, det_thread, mesh_thread,
-            pose_thread, gaze_thread, inf_thread, filter_thread,
+            cam_thread,
+            det_thread,
+            mesh_thread,
+            pose_thread,
+            gaze_thread,
+            inf_thread,
+            filter_thread,
         ]
         for s in self._stages:
             s.start()
@@ -634,9 +622,7 @@ class GazeEstimationPipeline:
         self._pending_predictor = predictor
         self._pending_backend = backend
         if self._inference_stage is not None:
-            self._inference_stage.set_model(
-                model, trainer, predictor=predictor, backend=backend
-            )
+            self._inference_stage.set_model(model, trainer, predictor=predictor, backend=backend)
 
     def set_bias_map(self, bias_map) -> None:
         """Attach a :class:`BiasMap` applied to model predictions.
@@ -656,9 +642,7 @@ class GazeEstimationPipeline:
                 s.update_kappa(self._kappa_yaw, self._kappa_pitch)
                 break
 
-    def set_camera_intrinsics(
-        self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
-    ) -> None:
+    def set_camera_intrinsics(self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray) -> None:
         """Set camera intrinsics.
 
         Safe to call before :meth:`start` (the values are used when the stages

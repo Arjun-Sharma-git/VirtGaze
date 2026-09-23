@@ -9,6 +9,7 @@ Usage:
 Hold a chessboard in front of the camera and press SPACE to capture a frame,
 ESC to finish and compute intrinsics.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,8 +59,15 @@ def main() -> None:
             cv2.drawChessboardCorners(display, (args.board_cols, args.board_rows), corners, found)
 
         n = len(frames)
-        cv2.putText(display, f"Captured: {n}/{args.frames}  [SPC=capture  ESC=done]",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(
+            display,
+            f"Captured: {n}/{args.frames}  [SPC=capture  ESC=done]",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+        )
         cv2.imshow("Camera Calibration", display)
 
         key = cv2.waitKey(1) & 0xFF

@@ -4,6 +4,7 @@
 Usage:
     python scripts/run_calibration.py [--user USER_ID] [--quick] [--config PATH]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,9 +39,7 @@ def main() -> None:
     config = Config.from_yaml(args.config)
     setup_logging(level="INFO")
 
-    profile_mgr = ProfileManager(
-        profiles_dir=str(config.get("profile.profiles_dir", "profiles"))
-    )
+    profile_mgr = ProfileManager(profiles_dir=str(config.get("profile.profiles_dir", "profiles")))
 
     sw, sh = detect_screen_resolution()
 
@@ -89,6 +88,7 @@ def main() -> None:
         pipeline.update_kappa(result.kappa_yaw, result.kappa_pitch)
         if result.mlp_weights_path and os.path.exists(result.mlp_weights_path):
             from gaze_estimation.model.trainer import MLPTrainer
+
             trainer = MLPTrainer()
             model, trainer = trainer.load(result.mlp_weights_path)
             pipeline.set_model(model, trainer)
@@ -127,15 +127,21 @@ def main() -> None:
     if args.quick:
         from gaze_estimation.calibration.quick_calibration import QuickCalibration
         from gaze_estimation.model.trainer import MLPTrainer
+
         profile = profile_mgr.load_profile(args.user)
-        if profile is None or not profile.mlp_weights_path or not os.path.exists(profile.mlp_weights_path):
+        if (
+            profile is None
+            or not profile.mlp_weights_path
+            or not os.path.exists(profile.mlp_weights_path)
+        ):
             print("[calibration] No existing profile — running full calibration instead.")
             args.quick = False
         else:
             trainer = MLPTrainer()
             model, trainer = trainer.load(profile.mlp_weights_path, config=config)
             qc = QuickCalibration(
-                sw, sh,
+                sw,
+                sh,
                 samples_per_target=int(qc_cfg.get("samples_per_target", 60)),
                 target_duration_sec=float(qc_cfg.get("target_duration_sec", 1.0)),
                 points=int(qc_cfg.get("points", 5)),
@@ -167,8 +173,10 @@ def main() -> None:
     if not args.quick and not done_event.is_set():
         from gaze_estimation.calibration.calibration_engine import CalibrationEngine
         from gaze_estimation.model.trainer import MLPTrainer
+
         engine = CalibrationEngine(
-            sw, sh,
+            sw,
+            sh,
             grid_cols=full_grid[0],
             grid_rows=full_grid[1],
             samples_per_target=int(cal_cfg.get("samples_per_target", 120)),

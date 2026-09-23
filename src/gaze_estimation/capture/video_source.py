@@ -1,4 +1,5 @@
 """Video file source: replays a recorded video for offline testing/benchmarking."""
+
 from __future__ import annotations
 
 import queue
@@ -95,7 +96,5 @@ class VideoFileSource(StageThread):
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
         self._frame_interval = 1.0 / fps
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self._logger.info(
-            "Opened video: %s  %.0f FPS  %d frames", self._video_path, fps, total
-        )
+        self._logger.info("Opened video: %s  %.0f FPS  %d frames", self._video_path, fps, total)
         self._cap = cap

@@ -1,4 +1,5 @@
 """Face ROI tracker — wraps OpenCV mean-shift for run-time use."""
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -36,16 +37,14 @@ class FaceTracker:
         bw = max(1, min(bw, w_f - x))
         bh = max(1, min(bh, h_f - y))
 
-        roi = frame[y: y + bh, x: x + bw]
+        roi = frame[y : y + bh, x : x + bw]
         roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
         hist = cv2.calcHist([roi_hsv], [0], None, [180], [0, 180])
         cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
         self._hist = hist
         self._window = (x, y, bw, bh)
 
-    def update(
-        self, frame: np.ndarray
-    ) -> Tuple[Optional[Tuple[int, int, int, int]], float]:
+    def update(self, frame: np.ndarray) -> Tuple[Optional[Tuple[int, int, int, int]], float]:
         """Track the face in the new frame.
 
         Returns:

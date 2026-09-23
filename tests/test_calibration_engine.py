@@ -1,4 +1,5 @@
 """Tests for CalibrationEngine: target generation, outlier removal."""
+
 from __future__ import annotations
 
 import time
@@ -70,8 +71,10 @@ def test_targets_are_randomised():
 
 # ── Residual bias map construction ───────────────────────────────────────────
 
+
 def _identity_model():
     """Stand-in model mapping the first two features straight to screen coords."""
+
     class _Model:
         def predict_numpy(self, X):
             return X[:, :2]
@@ -120,8 +123,6 @@ def test_build_residual_bias_map_returns_none_on_model_failure():
 
 
 def test_calibration_engine_accepts_bias_map_grid_config():
-    engine = CalibrationEngine(
-        1920, 1080, bias_map_cols=8, bias_map_rows=4, bias_map_smoothing=2.0
-    )
+    engine = CalibrationEngine(1920, 1080, bias_map_cols=8, bias_map_rows=4, bias_map_smoothing=2.0)
     assert (engine._bias_map_cols, engine._bias_map_rows) == (8, 4)
     assert engine._bias_map_smoothing == pytest.approx(2.0)

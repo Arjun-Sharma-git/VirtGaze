@@ -1,4 +1,5 @@
 """Tests for 3D gaze ray computation and angle utilities."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -104,7 +105,7 @@ def test_screen_to_angles_matches_ray_convention():
     assert below_centre[0] == pytest.approx(0.0, abs=1e-6)
     assert below_centre[1] < 0.0
 
-    down_ray = np.array([0.0, 1.0, 2.0])          # Y is down in camera coords
+    down_ray = np.array([0.0, 1.0, 2.0])  # Y is down in camera coords
     _, ray_pitch = ray_to_angles(normalize(down_ray))
     assert ray_pitch < 0.0
 

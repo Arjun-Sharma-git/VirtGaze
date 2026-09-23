@@ -1,4 +1,5 @@
 """ProfileManager: load/save/list user profiles for gaze calibration."""
+
 from __future__ import annotations
 
 import json
@@ -74,7 +75,11 @@ class ProfileManager:
         profile_dir = self._profile_dir(user_id)
         os.makedirs(profile_dir, exist_ok=True)
 
-        intrinsics_list = camera_matrix.tolist() if camera_matrix is not None else [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        intrinsics_list = (
+            camera_matrix.tolist()
+            if camera_matrix is not None
+            else [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        )
         dist_list = dist_coeffs.tolist() if dist_coeffs is not None else [0.0] * 5
 
         profile = UserProfile(
@@ -116,7 +121,8 @@ class ProfileManager:
         if not os.path.isdir(self._root):
             return []
         return [
-            name for name in os.listdir(self._root)
+            name
+            for name in os.listdir(self._root)
             if os.path.isdir(self._profile_dir(name))
             and os.path.exists(os.path.join(self._profile_dir(name), "profile.json"))
         ]
@@ -124,6 +130,7 @@ class ProfileManager:
     def delete_profile(self, user_id: str) -> None:
         """Delete a user's profile directory."""
         import shutil
+
         profile_dir = self._profile_dir(user_id)
         if os.path.isdir(profile_dir):
             shutil.rmtree(profile_dir)

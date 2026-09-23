@@ -1,4 +1,5 @@
 """Face mesh + iris landmark extraction using MediaPipe Face Mesh."""
+
 from __future__ import annotations
 
 import queue
@@ -13,7 +14,7 @@ from gaze_estimation.pipeline.thread_base import StageThread
 from gaze_estimation.utils.geometry import fit_circle
 
 # MediaPipe iris landmark indices in the 478-point model
-LEFT_IRIS_INDICES = list(range(468, 473))   # 5 points
+LEFT_IRIS_INDICES = list(range(468, 473))  # 5 points
 RIGHT_IRIS_INDICES = list(range(473, 478))  # 5 points
 
 
@@ -58,6 +59,7 @@ class FaceMeshExtractor(StageThread):
     def _setup(self) -> None:
         try:
             import mediapipe as mp
+
             self._face_mesh = mp.solutions.face_mesh.FaceMesh(
                 max_num_faces=self._max_num_faces,
                 refine_landmarks=self._refine_iris,
@@ -99,9 +101,7 @@ class FaceMeshExtractor(StageThread):
 
         # Extract mesh_468 (or 478 if iris refinement is on)
         n_lms = len(face_lms)
-        all_lms = np.array(
-            [[lm.x * w, lm.y * h] for lm in face_lms], dtype=np.float32
-        )
+        all_lms = np.array([[lm.x * w, lm.y * h] for lm in face_lms], dtype=np.float32)
 
         mesh_468 = all_lms[:468]
         iris_478: Optional[np.ndarray] = all_lms if n_lms >= 478 else None

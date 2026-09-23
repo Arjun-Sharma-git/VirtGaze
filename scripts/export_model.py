@@ -4,6 +4,7 @@
 Usage:
     python scripts/export_model.py --user USER_ID [--output models/out.onnx] [--format onnx|tensorrt]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,9 +32,7 @@ def main() -> None:
     from gaze_estimation.profile.profile_manager import ProfileManager
 
     config = Config.from_yaml(args.config)
-    profile_mgr = ProfileManager(
-        profiles_dir=str(config.get("profile.profiles_dir", "profiles"))
-    )
+    profile_mgr = ProfileManager(profiles_dir=str(config.get("profile.profiles_dir", "profiles")))
     profile = profile_mgr.load_profile(args.user)
     if profile is None:
         print(f"[export] No profile found for user '{args.user}'")

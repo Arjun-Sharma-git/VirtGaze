@@ -1,4 +1,5 @@
 """One Euro Filter — adaptive low-pass filter for gaze smoothing."""
+
 from __future__ import annotations
 
 import math
@@ -114,9 +115,7 @@ class OneEuroFilter2D:
         self._fx = OneEuroFilter(min_cutoff, beta, d_cutoff)
         self._fy = OneEuroFilter(min_cutoff, beta, d_cutoff)
 
-    def filter(
-        self, x: float, y: float, timestamp: float
-    ) -> tuple[float, float]:
+    def filter(self, x: float, y: float, timestamp: float) -> tuple[float, float]:
         """Filter a 2D (x, y) point."""
         return self._fx.filter(x, timestamp), self._fy.filter(y, timestamp)
 

@@ -1,4 +1,5 @@
 """Pytest fixtures shared across all test modules."""
+
 from __future__ import annotations
 
 import time
@@ -7,6 +8,7 @@ import numpy as np
 import pytest
 
 # ── Synthetic data ────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def frame_480p() -> np.ndarray:
@@ -18,11 +20,14 @@ def frame_480p() -> np.ndarray:
 @pytest.fixture
 def camera_matrix_640x480() -> np.ndarray:
     """A reasonable pinhole camera matrix for 640x480."""
-    return np.array([
-        [640.0,   0.0, 320.0],
-        [  0.0, 640.0, 240.0],
-        [  0.0,   0.0,   1.0],
-    ], dtype=np.float64)
+    return np.array(
+        [
+            [640.0, 0.0, 320.0],
+            [0.0, 640.0, 240.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
 
 
 @pytest.fixture
@@ -43,6 +48,7 @@ def mock_mesh_468() -> np.ndarray:
 def mock_head_pose():
     """HeadPose with identity rotation (yaw=0, pitch=0, roll=0)."""
     from gaze_estimation.pipeline.schemas import HeadPose
+
     return HeadPose(
         rvec=np.zeros(3, dtype=np.float64),
         tvec=np.array([0.0, 0.0, 600.0], dtype=np.float64),
@@ -55,6 +61,7 @@ def mock_head_pose():
 def calibration_samples():
     """200 synthetic CalibrationSamples for MLP training tests."""
     from gaze_estimation.pipeline.schemas import FEATURE_KEYS, CalibrationSample
+
     rng = np.random.default_rng(99)
     samples = []
     for _ in range(200):
@@ -62,10 +69,12 @@ def calibration_samples():
         feats["landmark_confidence"] = 0.9
         sx = float(rng.uniform(100, 1820))
         sy = float(rng.uniform(100, 980))
-        samples.append(CalibrationSample(
-            features=feats,
-            screen_x=sx,
-            screen_y=sy,
-            timestamp=time.time(),
-        ))
+        samples.append(
+            CalibrationSample(
+                features=feats,
+                screen_x=sx,
+                screen_y=sy,
+                timestamp=time.time(),
+            )
+        )
     return samples

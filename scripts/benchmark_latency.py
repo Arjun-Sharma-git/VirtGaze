@@ -4,6 +4,7 @@
 Usage:
     python scripts/benchmark_latency.py [--frames 200] [--config PATH]
 """
+
 from __future__ import annotations
 
 import argparse

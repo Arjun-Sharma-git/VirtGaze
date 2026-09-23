@@ -1,4 +1,5 @@
 """Structured logging setup for the gaze estimation system."""
+
 from __future__ import annotations
 
 import logging

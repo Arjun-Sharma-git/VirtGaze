@@ -1,4 +1,5 @@
 """MLPTrainer: trains GazeMLP on calibration data with early stopping."""
+
 from __future__ import annotations
 
 import os
@@ -23,6 +24,7 @@ def _to_tensor(array: Optional[np.ndarray]):
     if array is None:
         return None
     import torch
+
     return torch.as_tensor(np.asarray(array, dtype=np.float32))
 
 
@@ -31,6 +33,7 @@ def _from_checkpoint(value: object) -> Optional[np.ndarray]:
     if value is None:
         return None
     import torch
+
     if isinstance(value, torch.Tensor):
         return value.detach().cpu().numpy().astype(np.float32)
     return np.asarray(value, dtype=np.float32)
@@ -140,11 +143,7 @@ class MLPTrainer:
 
         # Only fit the normaliser on a full (re)calibration, or when no
         # statistics exist yet.
-        fit_norm = (
-            refit_normalisation
-            or self.feature_mean is None
-            or self.feature_std is None
-        )
+        fit_norm = refit_normalisation or self.feature_mean is None or self.feature_std is None
         X_norm = self._normalise_features(X, fit=fit_norm)
 
         # Normalise labels to [0, 1]
@@ -177,9 +176,7 @@ class MLPTrainer:
         else:
             model = GazeMLP(self.input_dim, self.hidden_dims).to(dev)
 
-        optimiser = torch.optim.Adam(
-            model.parameters(), lr=self.lr, weight_decay=self.weight_decay
-        )
+        optimiser = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         loss_fn = nn.MSELoss()
 
         best_val_loss = float("inf")
@@ -238,8 +235,10 @@ class MLPTrainer:
             self.lr = lr
         try:
             return self.train(
-                X, Y,
-                self.screen_width, self.screen_height,
+                X,
+                Y,
+                self.screen_width,
+                self.screen_height,
                 existing_model=model,
                 refit_normalisation=False,
             )
@@ -257,6 +256,7 @@ class MLPTrainer:
         ``torch.load(..., weights_only=True)``.
         """
         import torch
+
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         torch.save(
             {
@@ -291,9 +291,7 @@ class MLPTrainer:
         except Exception:
             # Legacy checkpoints stored raw numpy arrays, which the
             # weights_only unpickler refuses.  Only fall back for trusted files.
-            _logger.warning(
-                "Falling back to weights_only=False for legacy checkpoint: %s", path
-            )
+            _logger.warning("Falling back to weights_only=False for legacy checkpoint: %s", path)
             ckpt = torch.load(path, map_location="cpu", weights_only=False)
 
         model = GazeMLP(
@@ -335,7 +333,7 @@ class MLPTrainer:
 
     def features_dict_to_vector(self, features: Dict[str, float]) -> np.ndarray:
         """Convert a FEATURE_KEYS dict to a normalised (1, 34) float32 array."""
-        raw = np.array(
-            [features.get(k, 0.0) for k in FEATURE_KEYS], dtype=np.float32
-        ).reshape(1, -1)
+        raw = np.array([features.get(k, 0.0) for k in FEATURE_KEYS], dtype=np.float32).reshape(
+            1, -1
+        )
         return self._normalise_features(raw, fit=False)

@@ -1,4 +1,5 @@
 """Tests for the Unscented Kalman Filter."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -49,6 +50,7 @@ def test_ukf_state_dimension():
 
 # ── Fixation-driven measurement-noise scaling ────────────────────────────────
 
+
 def test_set_measurement_scale_updates_r():
     ukf = UnscentedKalmanFilter(measurement_noise=5.0)
     assert ukf.measurement_scale == 1.0
@@ -79,11 +81,11 @@ def test_larger_measurement_scale_smooths_more():
 
     def _response_after_step(scale: float) -> float:
         ukf = UnscentedKalmanFilter(process_noise=0.01, measurement_noise=5.0)
-        ukf.update(np.array([500.0, 500.0]))       # start at 500
+        ukf.update(np.array([500.0, 500.0]))  # start at 500
         ukf.set_measurement_scale(scale)
         for _ in range(5):
             ukf.predict(0.016)
-            ukf.update(np.array([900.0, 500.0]))   # step input
+            ukf.update(np.array([900.0, 500.0]))  # step input
         return float(ukf.get_position()[0])
 
     responsive = _response_after_step(0.05)

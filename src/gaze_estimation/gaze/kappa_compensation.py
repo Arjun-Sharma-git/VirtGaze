@@ -1,4 +1,5 @@
 """Kappa angle estimation — offset between optical and visual axes."""
+
 from __future__ import annotations
 
 from typing import List, Optional, Tuple
@@ -38,9 +39,12 @@ def estimate_kappa(
 
     for s in samples:
         target_yaw, target_pitch = screen_to_angles(
-            s.screen_x, s.screen_y,
-            screen_width, screen_height,
-            distance_mm, mm_per_px,
+            s.screen_x,
+            s.screen_y,
+            screen_width,
+            screen_height,
+            distance_mm,
+            mm_per_px,
         )
         optical_yaw = s.features.get("gaze_yaw_avg", 0.0)
         optical_pitch = s.features.get("gaze_pitch_avg", 0.0)

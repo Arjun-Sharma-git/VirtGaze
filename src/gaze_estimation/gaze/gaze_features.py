@@ -1,4 +1,5 @@
 """Feature extraction: builds the 34-dimensional FEATURE_KEYS vector."""
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -35,8 +36,8 @@ class FeatureExtractor:
         head_pose: Optional[HeadPose],
         gaze_ray_left: Optional[GazeRay],
         gaze_ray_right: Optional[GazeRay],
-        frame_shape: Tuple,           # (H, W, C)
-        face_bbox: Optional[Tuple],   # (x, y, w, h)
+        frame_shape: Tuple,  # (H, W, C)
+        face_bbox: Optional[Tuple],  # (x, y, w, h)
         confidence: float,
     ) -> dict:
         """Return a feature dict keyed by FEATURE_KEYS.

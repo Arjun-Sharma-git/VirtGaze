@@ -1,4 +1,5 @@
 """Tests for MLPTrainer: training convergence, save/load, normalisation."""
+
 from __future__ import annotations
 
 import os
@@ -17,10 +18,12 @@ def _make_data(n: int = 300):
     X = rng.standard_normal((n, FEATURE_DIM)).astype(np.float32)
     # Simple linear target (should be learnable)
     sw, sh = 1920, 1080
-    Y = np.column_stack([
-        sw * 0.5 + X[:, 0] * 50,
-        sh * 0.5 + X[:, 1] * 50,
-    ]).astype(np.float32)
+    Y = np.column_stack(
+        [
+            sw * 0.5 + X[:, 0] * 50,
+            sh * 0.5 + X[:, 1] * 50,
+        ]
+    ).astype(np.float32)
     return X, Y
 
 
@@ -36,6 +39,7 @@ def test_trainer_output_in_range():
     trainer = MLPTrainer(epochs=5, batch_size=64, hidden_dims=[32])
     model = trainer.train(X, Y)
     import torch
+
     x = torch.from_numpy(trainer.normalise(X[:4]))
     model.eval()
     with torch.no_grad():
@@ -85,9 +89,7 @@ def test_fine_tune_preserves_normalisation_statistics():
 
 def test_fine_tune_restores_learning_rate_and_epochs():
     X, Y = _make_data(100)
-    trainer = MLPTrainer(
-        epochs=7, batch_size=32, hidden_dims=[16], learning_rate=1e-3
-    )
+    trainer = MLPTrainer(epochs=7, batch_size=32, hidden_dims=[16], learning_rate=1e-3)
     model = trainer.train(X, Y)
 
     trainer.fine_tune(model, X[:20], Y[:20], epochs=2, lr=1e-5)
@@ -98,6 +100,7 @@ def test_fine_tune_restores_learning_rate_and_epochs():
 
 def test_features_dict_to_vector():
     from gaze_estimation.pipeline.schemas import FEATURE_KEYS
+
     X, _ = _make_data()
     trainer = MLPTrainer(epochs=3, batch_size=32, hidden_dims=[16])
     trainer._normalise_features(X, fit=True)

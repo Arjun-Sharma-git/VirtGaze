@@ -9,6 +9,7 @@ used to convert the ONNX model to a .trt engine first::
 If TensorRT is not installed this module still imports successfully; the
 class will raise :class:`RuntimeError` when instantiated.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -34,8 +35,7 @@ class TensorRTInference:
             import tensorrt as trt  # type: ignore[import]
         except ImportError as exc:
             raise RuntimeError(
-                "TensorRT or PyCUDA not installed. "
-                "Install with: pip install tensorrt pycuda"
+                "TensorRT or PyCUDA not installed. " "Install with: pip install tensorrt pycuda"
             ) from exc
 
         self._input_dim = input_dim

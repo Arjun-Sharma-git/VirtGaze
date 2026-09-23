@@ -1,4 +1,5 @@
 """Integration tests: config loading, schema validation, adaptation buffer."""
+
 from __future__ import annotations
 
 import time
@@ -15,6 +16,7 @@ from gaze_estimation.pipeline.schemas import (
 )
 
 # ── Config tests ─────────────────────────────────────────────────────────────
+
 
 def test_default_config_loads():
     cfg = Config.default()
@@ -42,6 +44,7 @@ def test_config_section():
 
 # ── Schema tests ──────────────────────────────────────────────────────────────
 
+
 def test_frame_packet():
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     pkt = FramePacket(timestamp=time.time(), frame=frame, frame_id=0)
@@ -60,8 +63,10 @@ def test_feature_keys_unique():
 
 # ── Adaptation buffer integration ─────────────────────────────────────────────
 
+
 def test_adaptation_buffer_add_get():
     from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
+
     buf = AdaptationBuffer(max_size=100)
     feats = {k: 0.5 for k in FEATURE_KEYS}
     for i in range(10):
@@ -74,6 +79,7 @@ def test_adaptation_buffer_add_get():
 
 def test_adaptation_buffer_max_size():
     from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
+
     buf = AdaptationBuffer(max_size=5)
     feats = {k: 0.0 for k in FEATURE_KEYS}
     for i in range(20):
@@ -83,6 +89,7 @@ def test_adaptation_buffer_max_size():
 
 def test_adaptation_buffer_new_counter():
     from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
+
     buf = AdaptationBuffer()
     feats = {k: 0.0 for k in FEATURE_KEYS}
     buf.add(feats, 0, 0)
@@ -93,6 +100,7 @@ def test_adaptation_buffer_new_counter():
 
 
 # ── Pipeline wiring: calibration tap + frame source ────────────────────────────
+
 
 def test_pipeline_exposes_distinct_calibration_tap():
     """Calibration must read its own queue, not the live inference queue."""
@@ -172,7 +180,7 @@ def test_inference_stage_geometric_fallback_clamps_and_inverts_pitch():
             gaze_pitch=pitch,
             features=empty_features(),
             head_pose=None,
-            confidence=0.5,          # below MLP threshold, above geometric minimum
+            confidence=0.5,  # below MLP threshold, above geometric minimum
         )
 
     # Looking up (positive pitch) must move the estimate *up* the screen
@@ -333,7 +341,7 @@ def test_latest_packet_getters_drain_taps():
 
     latest = pipeline.get_latest_gaze_packet()
     assert latest is not None
-    assert latest.timestamp == 2.0                 # newest of the three
+    assert latest.timestamp == 2.0  # newest of the three
     assert pipeline._queues["calibration"].empty()  # drained
     assert pipeline.get_latest_gaze_packet() is None
     assert pipeline.get_latest_mesh_packet() is None
@@ -375,9 +383,7 @@ def test_pipeline_applies_model_and_kappa_set_before_start_integration():
         assert pipeline._inference_stage is not None
         assert pipeline._inference_stage._trainer is not None
 
-        gaze_stages = [
-            s for s in pipeline._stages if isinstance(s, GazeGeometryEstimator)
-        ]
+        gaze_stages = [s for s in pipeline._stages if isinstance(s, GazeGeometryEstimator)]
         assert len(gaze_stages) == 1
         assert gaze_stages[0]._kappa_yaw == pytest.approx(1.5)
         assert gaze_stages[0]._kappa_pitch == pytest.approx(-2.5)

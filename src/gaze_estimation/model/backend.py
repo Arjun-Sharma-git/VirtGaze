@@ -1,4 +1,5 @@
 """Inference backend factory — selects the torch / ONNX / TensorRT predictor."""
+
 from __future__ import annotations
 
 from typing import Optional, Tuple

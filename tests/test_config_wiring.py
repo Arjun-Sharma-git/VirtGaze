@@ -9,6 +9,7 @@ Where a component needs hardware (the camera), the pipeline's call site is
 verified by substituting a recording stub for the capture stage, so the wiring
 is covered without a webcam.
 """
+
 from __future__ import annotations
 
 import math
@@ -65,6 +66,7 @@ def _inference_stage(config: Config):
 
 # ── inference.fallback_to_geometric ──────────────────────────────────────────
 
+
 class _ExplodingPredictor:
     """Stands in for an unavailable ONNX/TensorRT backend."""
 
@@ -92,14 +94,10 @@ def test_fallback_enabled_projects_geometrically():
 
     packet = out.get_nowait()
     assert packet.source == "geometric"
-    distance = 600.0                                   # default fallback distance
-    assert packet.screen_x == pytest.approx(
-        SCREEN_W / 2 + math.tan(math.radians(10.0)) * distance
-    )
+    distance = 600.0  # default fallback distance
+    assert packet.screen_x == pytest.approx(SCREEN_W / 2 + math.tan(math.radians(10.0)) * distance)
     # pitch is up-positive, so a positive pitch moves *up* the screen
-    assert packet.screen_y == pytest.approx(
-        SCREEN_H / 2 - math.tan(math.radians(5.0)) * distance
-    )
+    assert packet.screen_y == pytest.approx(SCREEN_H / 2 - math.tan(math.radians(5.0)) * distance)
 
 
 def test_fallback_distance_comes_from_config():
@@ -148,6 +146,7 @@ def test_low_confidence_holds_below_geometric_threshold():
 
 # ── mlp.* and inference.device ───────────────────────────────────────────────
 
+
 def test_trainer_from_config_reads_mlp_section():
     cfg = Config.default()
     cfg.set("mlp.hidden_dims", [8, 4])
@@ -182,7 +181,7 @@ def test_trainer_load_keeps_architecture_and_configures_optimiser(tmp_path):
     loaded, restored = MLPTrainer().load(save_path, config=cfg)
 
     assert loaded.input_dim == FEATURE_DIM
-    assert loaded.hidden_dims == [8, 4]        # architecture from the checkpoint
+    assert loaded.hidden_dims == [8, 4]  # architecture from the checkpoint
     assert restored.hidden_dims == [8, 4]
     assert restored.input_dim == FEATURE_DIM
     assert restored.lr == pytest.approx(3e-4)  # optimisation from the config
@@ -191,6 +190,7 @@ def test_trainer_load_keeps_architecture_and_configures_optimiser(tmp_path):
 
 # ── detection.model / mesh.static_image_mode ─────────────────────────────────
 
+
 def test_resolve_detection_model_maps_config_names():
     assert resolve_detection_model("mediapipe_short") == ("mediapipe_short", 0)
     assert resolve_detection_model("MediaPipe_Full") == ("mediapipe_full", 1)
@@ -198,9 +198,7 @@ def test_resolve_detection_model_maps_config_names():
 
 
 def test_face_detector_uses_configured_model():
-    detector = FaceDetector(
-        queue.Queue(), queue.Queue(), threading.Event(), model="mediapipe_full"
-    )
+    detector = FaceDetector(queue.Queue(), queue.Queue(), threading.Event(), model="mediapipe_full")
     assert detector._model_selection == 1
     assert detector._model_name == "mediapipe_full"
 
@@ -214,15 +212,14 @@ def test_face_mesh_static_image_mode_flag():
 
 # ── pose.solvepnp_method / pose.use_ransac ───────────────────────────────────
 
+
 def test_resolve_solvepnp_flags_accepts_names_and_falls_back():
     assert resolve_solvepnp_flags("SOLVEPNP_ITERATIVE") == cv2.SOLVEPNP_ITERATIVE
     assert resolve_solvepnp_flags("epnp") == cv2.SOLVEPNP_EPNP
     assert resolve_solvepnp_flags("not_a_solver") == cv2.SOLVEPNP_ITERATIVE
 
 
-def test_head_pose_estimator_honours_solver_options(
-    camera_matrix_640x480, dist_coeffs_zero
-):
+def test_head_pose_estimator_honours_solver_options(camera_matrix_640x480, dist_coeffs_zero):
     estimator = HeadPoseEstimator(
         input_queue=queue.Queue(),
         output_queue=queue.Queue(),
@@ -237,6 +234,7 @@ def test_head_pose_estimator_honours_solver_options(
 
 
 # ── quick_calibration.points ─────────────────────────────────────────────────
+
 
 def test_quick_calibration_supports_five_and_nine_point_layouts():
     five = QuickCalibration(SCREEN_W, SCREEN_H, points=5)
@@ -257,6 +255,7 @@ def test_quick_calibration_falls_back_to_five_points():
 
 # ── logging.log_fps / logging.log_latency ────────────────────────────────────
 
+
 def test_overlay_hud_flags_toggle_the_text():
     frame = np.zeros((120, 320, 3), dtype=np.uint8)
 
@@ -269,6 +268,7 @@ def test_overlay_hud_flags_toggle_the_text():
 
 # ── camera.auto_exposure ─────────────────────────────────────────────────────
 
+
 def test_camera_capture_stores_auto_exposure_flag():
     disabled = CameraCapture(
         output_queue=queue.Queue(), stop_event=threading.Event(), auto_exposure=False
@@ -280,6 +280,7 @@ def test_camera_capture_stores_auto_exposure_flag():
 
 
 # ── pipeline call sites ──────────────────────────────────────────────────────
+
 
 class _NullSource(StageThread):
     """A frame source that emits nothing (avoids needing a camera)."""

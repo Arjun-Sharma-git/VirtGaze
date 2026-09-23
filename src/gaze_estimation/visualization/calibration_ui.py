@@ -1,4 +1,5 @@
 """CalibrationUI: fullscreen pygame window for calibration target display."""
+
 from __future__ import annotations
 
 import time
@@ -66,6 +67,7 @@ class CalibrationUI:
         """Initialise pygame and open the fullscreen window."""
         try:
             import pygame
+
             self._pygame = pygame
             pygame.init()
             self._screen = pygame.display.set_mode(
@@ -116,8 +118,9 @@ class CalibrationUI:
         radius = max(2, int(state.radius))
         ix, iy = int(state.x), int(state.y)
         alpha = max(0.0, min(1.0, state.alpha))
-        color = tuple(int(c * alpha + bg * (1.0 - alpha))
-                      for c, bg in zip(self._dot_color, self._bg_color))
+        color = tuple(
+            int(c * alpha + bg * (1.0 - alpha)) for c, bg in zip(self._dot_color, self._bg_color)
+        )
         pg.draw.circle(self._screen, color, (ix, iy), radius)
         pg.draw.circle(self._screen, (255, 255, 255), (ix, iy), 5)
 
@@ -137,8 +140,7 @@ class CalibrationUI:
             text_surf = font.render(self._message, True, (200, 200, 200))
             self._screen.blit(
                 text_surf,
-                (self.screen_width // 2 - text_surf.get_width() // 2,
-                 self.screen_height - 90),
+                (self.screen_width // 2 - text_surf.get_width() // 2, self.screen_height - 90),
             )
         except Exception:
             pass

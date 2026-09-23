@@ -1,4 +1,5 @@
 """Tests for the One Euro Filter."""
+
 from __future__ import annotations
 
 from gaze_estimation.filtering.one_euro import OneEuroFilter, OneEuroFilter2D

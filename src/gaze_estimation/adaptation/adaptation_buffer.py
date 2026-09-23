@@ -1,4 +1,5 @@
 """Online adaptation buffer — stores (features, cursor) pairs for implicit calibration."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -23,9 +24,7 @@ class AdaptationBuffer:
         self._buffer: deque = deque(maxlen=max_size)
         self._new_since_train: int = 0
 
-    def add(
-        self, features: dict, cursor_x: float, cursor_y: float
-    ) -> None:
+    def add(self, features: dict, cursor_x: float, cursor_y: float) -> None:
         """Store one implicit calibration sample.
 
         Args:
@@ -33,15 +32,11 @@ class AdaptationBuffer:
             cursor_x:  Mouse cursor X at click time (pixels).
             cursor_y:  Mouse cursor Y at click time (pixels).
         """
-        vec = np.array(
-            [features.get(k, 0.0) for k in FEATURE_KEYS], dtype=np.float32
-        )
+        vec = np.array([features.get(k, 0.0) for k in FEATURE_KEYS], dtype=np.float32)
         self._buffer.append((vec, float(cursor_x), float(cursor_y)))
         self._new_since_train += 1
 
-    def get_batch(
-        self, n: Optional[int] = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def get_batch(self, n: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
         """Return (X, Y) arrays.
 
         Args:

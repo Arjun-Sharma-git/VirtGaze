@@ -1,4 +1,5 @@
 """Tests for StageThread tap queues and put_or_drop backpressure."""
+
 from __future__ import annotations
 
 import queue
@@ -30,7 +31,7 @@ def test_put_or_drop_drops_oldest_when_full():
     for i in range(5):
         put_or_drop(q, i)
     assert q.qsize() == 2
-    assert q.get_nowait() == 3   # 0..2 were dropped
+    assert q.get_nowait() == 3  # 0..2 were dropped
     assert q.get_nowait() == 4
 
 
@@ -63,5 +64,5 @@ def test_tap_uses_drop_oldest_semantics():
         stage.process(None)
 
     assert tap.qsize() == 2
-    assert tap.get_nowait() == 3   # only the two newest survive
+    assert tap.get_nowait() == 3  # only the two newest survive
     assert tap.get_nowait() == 4
