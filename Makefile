@@ -15,7 +15,7 @@ install-rocm:
 
 # NVIDIA GPU (CUDA) — standard onnxruntime-gpu + existing torch CUDA wheel
 install-cuda:
-	pip install onnxruntime-gpu>=1.15.0
+	pip install "onnxruntime-gpu>=1.15.0"
 	pip install -e .
 
 # ─── Code Quality ─────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export-model:
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
 clean:
-	rm -rf __pycache__ src/**/__pycache__ tests/__pycache__
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf *.egg-info src/*.egg-info
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
 	rm -rf htmlcov .coverage

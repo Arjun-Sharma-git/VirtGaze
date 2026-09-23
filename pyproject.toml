@@ -7,7 +7,7 @@ name = "gaze-estimation"
 version = "0.1.0"
 description = "Production-grade 3D gaze estimation system from a standard webcam"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "3dEyeEstim"}]
 dependencies = [
@@ -25,13 +25,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Upper bounds keep a release that widens a linter's default behaviour (or drops
+# an interpreter) from turning the build red without a code change; the floor
+# matches the version each tool was validated against.
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-asyncio>=0.21.0",
-    "mypy>=1.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
+    "pytest>=7.0.0,<10",
+    "pytest-cov>=4.0.0,<8",
+    "pytest-asyncio>=0.21.0,<2",
+    "mypy>=1.11,<3",
+    "ruff>=0.8,<1",
+    "black>=24.0.0,<27",
 ]
 # NVIDIA GPU — TensorRT acceleration (requires CUDA + TensorRT installed)
 gpu = ["tensorrt>=8.6.0"]
@@ -52,11 +55,11 @@ filterwarnings = [
 
 [tool.black]
 line-length = 100
-target-version = ["py39"]
+target-version = ["py310"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 # Declare the rule set explicitly.  The previous unpinned `ruff>=0.1.0`
@@ -66,5 +69,11 @@ target-version = "py39"
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.mypy]
-python_version = "3.9"
+# Deliberately no python_version pin.
+#
+# mypy 2.x rejects "3.9", so the old pin made `make typecheck` fail outright.
+# Pinning *below* the running interpreter is also unsafe: mypy then parses
+# modern stubs (e.g. numpy's PEP 695 `type` statements) with the wrong grammar
+# and reports a syntax error inside the stub.  Left unset, mypy targets the
+# interpreter it runs under, which is the same interpreter the tests use.
 ignore_missing_imports = true

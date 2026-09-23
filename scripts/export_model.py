@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 
 
@@ -39,7 +40,7 @@ def main() -> None:
         sys.exit(1)
 
     weights_path = profile.mlp_weights_path
-    if not os.path.exists(weights_path):
+    if not weights_path or not os.path.exists(weights_path):
         print(f"[export] Weights file not found: {weights_path}")
         sys.exit(1)
 
@@ -52,15 +53,21 @@ def main() -> None:
         export_to_onnx(model, out_path, input_dim=model.input_dim)
         print(f"[export] ONNX model saved to {out_path}")
     else:
-        # Convert via trtexec (subprocess)
+        # Convert via trtexec.  Run it as an argv list (no shell), so a path
+        # containing spaces or shell metacharacters cannot be reinterpreted as
+        # a command.
         onnx_path = out_path.replace(".trt", ".onnx")
         export_to_onnx(model, onnx_path, input_dim=model.input_dim)
         trt_path = out_path if out_path.endswith(".trt") else out_path.replace(".onnx", ".trt")
-        cmd = f"trtexec --onnx={onnx_path} --saveEngine={trt_path} --fp16"
-        print(f"[export] Running: {cmd}")
-        ret = os.system(cmd)
-        if ret != 0:
-            print("[export] trtexec failed.  Is TensorRT installed?")
+        cmd = ["trtexec", f"--onnx={onnx_path}", f"--saveEngine={trt_path}", "--fp16"]
+        print(f"[export] Running: {' '.join(cmd)}")
+        try:
+            subprocess.run(cmd, check=True)
+        except FileNotFoundError:
+            print("[export] trtexec not found.  Is TensorRT installed and on PATH?")
+            sys.exit(1)
+        except subprocess.CalledProcessError as exc:
+            print(f"[export] trtexec failed (exit {exc.returncode}).  Is TensorRT installed?")
             sys.exit(1)
         print(f"[export] TensorRT engine saved to {trt_path}")
 
