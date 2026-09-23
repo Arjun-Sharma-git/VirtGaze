@@ -76,7 +76,7 @@ class VideoFileSource(StageThread):
                 return
 
         packet = FramePacket(
-            timestamp=time.time(),
+            timestamp=time.perf_counter(),
             frame=frame,
             frame_id=self._frame_id,
         )

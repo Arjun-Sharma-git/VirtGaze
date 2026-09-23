@@ -1,12 +1,11 @@
 """Central data-packet and schema definitions shared across all pipeline stages."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
 import numpy as np
-
 
 # ── Feature vector ────────────────────────────────────────────────────────────
 
@@ -58,7 +57,7 @@ class GazeState(str, Enum):
 @dataclass
 class FramePacket:
     """Raw camera frame."""
-    timestamp: float           # Unix timestamp (seconds)
+    timestamp: float           # Monotonic timestamp (time.perf_counter, seconds)
     frame: np.ndarray          # BGR image, shape (H, W, 3)
     frame_id: int              # Monotonic counter
 

@@ -10,9 +10,13 @@ import cv2
 import numpy as np
 
 from gaze_estimation.pipeline.schemas import FramePacket
-from gaze_estimation.pipeline.thread_base import StageThread, put_or_drop
-from gaze_estimation.utils.camera_calibration import estimate_camera_matrix, zero_dist_coeffs
-from gaze_estimation.utils.logging import get_logger
+from gaze_estimation.pipeline.thread_base import StageThread
+from gaze_estimation.utils.camera_calibration import (
+    estimate_camera_matrix,
+    precompute_undistort_maps,
+    undistort_frame,
+    zero_dist_coeffs,
+)
 
 _MAX_CONSECUTIVE_FAILURES = 5
 _RECONNECT_DELAY_SEC = 2.0
@@ -39,6 +43,7 @@ class CameraCapture(StageThread):
         fps: int = 60,
         camera_matrix: Optional[np.ndarray] = None,
         dist_coeffs: Optional[np.ndarray] = None,
+        undistort: bool = False,
         name: str = "camera_thread",
     ) -> None:
         super().__init__(
@@ -61,6 +66,11 @@ class CameraCapture(StageThread):
             else estimate_camera_matrix(width, height)
         )
         self._dist_coeffs = dist_coeffs if dist_coeffs is not None else zero_dist_coeffs()
+
+        # Optional in-place lens-distortion removal
+        self._undistort = undistort
+        self._map1: Optional[np.ndarray] = None
+        self._map2: Optional[np.ndarray] = None
 
     # ── StageThread interface ─────────────────────────────────────────────
 
@@ -90,8 +100,10 @@ class CameraCapture(StageThread):
             return
 
         self._failure_count = 0
+        if self._undistort:
+            frame = self._apply_undistort(frame)
         packet = FramePacket(
-            timestamp=time.time(),
+            timestamp=time.perf_counter(),
             frame=frame,
             frame_id=self._frame_id,
         )
@@ -107,11 +119,37 @@ class CameraCapture(StageThread):
     def set_camera_intrinsics(
         self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray
     ) -> None:
-        """Update camera intrinsics (e.g. after chessboard calibration)."""
+        """Update camera intrinsics (e.g. after chessboard calibration).
+
+        Rebuilds the undistortion maps when distortion removal is enabled.
+        """
         self._camera_matrix = camera_matrix.astype(np.float64)
         self._dist_coeffs = dist_coeffs.astype(np.float64)
+        self._rebuild_undistort_maps()
 
     # ── Private ───────────────────────────────────────────────────────────
+
+    def _rebuild_undistort_maps(self) -> None:
+        """(Re)compute the undistortion maps for the current frame size."""
+        if not self._undistort or self._cap is None:
+            self._map1 = self._map2 = None
+            return
+        w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or self._width
+        h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or self._height
+        try:
+            self._map1, self._map2 = precompute_undistort_maps(
+                self._camera_matrix, self._dist_coeffs, w, h
+            )
+            self._logger.info("Undistortion maps built for %dx%d", w, h)
+        except Exception as exc:
+            self._logger.warning("Could not build undistortion maps: %s", exc)
+            self._map1 = self._map2 = None
+
+    def _apply_undistort(self, frame: np.ndarray) -> np.ndarray:
+        """Apply the pre-computed undistortion maps to a frame."""
+        if self._map1 is None or self._map2 is None:
+            return frame
+        return undistort_frame(frame, self._map1, self._map2)
 
     def _open_camera(self) -> None:
         self._release()
@@ -141,6 +179,7 @@ class CameraCapture(StageThread):
 
         self._cap = cap
         self._failure_count = 0
+        self._rebuild_undistort_maps()
 
     def _release(self) -> None:
         if self._cap is not None:

@@ -44,6 +44,7 @@ class StageThread(threading.Thread, ABC):
         input_queue: Optional[queue.Queue],
         output_queue: Optional[queue.Queue],
         stop_event: threading.Event,
+        tap_queue: Optional[queue.Queue] = None,
         name: str = "stage_thread",
         timeout: float = 0.1,
     ) -> None:
@@ -51,6 +52,10 @@ class StageThread(threading.Thread, ABC):
         self.input_queue = input_queue
         self.output_queue = output_queue
         self.stop_event = stop_event
+        # Optional observer queue: every emitted item is *also* copied here.
+        # Used by calibration (GazePacket tap) and the live preview window
+        # (MeshPacket tap) so observers never steal items from the pipeline.
+        self.tap_queue = tap_queue
         self._timeout = timeout
         self._logger = get_logger(name)
         self._fps = FPSCounter(window=60)
@@ -63,7 +68,13 @@ class StageThread(threading.Thread, ABC):
         self.stop_event.set()
 
     def emit(self, item: object) -> None:
-        """Push *item* to the output queue, dropping oldest if full."""
+        """Push *item* to the output queue (and the tap queue, if any).
+
+        Drops the oldest item when a queue is full so that the most recent
+        data is always available downstream.
+        """
+        if self.tap_queue is not None:
+            put_or_drop(self.tap_queue, item)
         if self.output_queue is not None:
             put_or_drop(self.output_queue, item)
 
@@ -92,7 +103,14 @@ class StageThread(threading.Thread, ABC):
     def run(self) -> None:
         """Main loop: read from input_queue, call process(), emit output."""
         self._logger.info("Thread started")
-        self._setup()
+        try:
+            self._setup()
+        except Exception:
+            # Without this guard a failing source (bad camera index, missing
+            # video file, …) silently kills the thread and the pipeline stalls.
+            self._logger.exception("Stage setup failed — thread will exit")
+            self._teardown()
+            return
         try:
             while not self.stop_event.is_set():
                 if self.input_queue is None:
