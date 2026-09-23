@@ -42,7 +42,12 @@ jobs:
       - name: Install CPU-only PyTorch
         # Plain `pip install torch` selects the CUDA wheel on Linux (~2 GB).
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install -e ".[dev]"
+      # The full dependency set is installed on purpose.  mypy's verdict depends
+      # on which stub packages resolve, and a leaner install hides exactly the
+      # errors a developer machine lacking a wheel (e.g. pygame on Python 3.14)
+      # cannot see locally.
+      - name: Install the package with all runtime deps
+        run: pip install -e ".[dev]"
       - run: mypy src/gaze_estimation
 
   test:

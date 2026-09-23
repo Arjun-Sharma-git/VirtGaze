@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Tuple
+from typing import Any, Callable, Tuple
 
 from gaze_estimation.calibration.calibration_target import CalibrationTarget
 
@@ -59,9 +59,13 @@ class CalibrationUI:
         self._progress: float = 0.0
         self._message: str = "Look at the red dot"
         self._running = False
-        self._screen = None
-        self._clock = None
-        self._pygame = None
+        # Typed Any rather than inferred None: pygame is imported lazily inside
+        # start() so this module stays importable (and its type checks stay
+        # identical) on interpreters with no pygame wheel, while holding a real
+        # module / Surface / Clock once the window is open.
+        self._screen: Any = None
+        self._clock: Any = None
+        self._pygame: Any = None
 
     def start(self) -> None:
         """Initialise pygame and open the fullscreen window."""
