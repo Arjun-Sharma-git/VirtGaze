@@ -1,5 +1,7 @@
 # 3D Gaze Estimation System
 
+![CI](https://github.com/Arjun-Sharma-git/VirtGaze/actions/workflows/ci.yml/badge.svg)
+
 A production-grade real-time 3D gaze estimation system from a standard webcam, targeting:
 
 | Metric | Target |
@@ -246,6 +248,34 @@ make test-unit
 # With coverage report
 make test-cov
 ```
+
+---
+
+## Code Quality
+
+```bash
+make lint          # ruff (rule set pinned in pyproject.toml)
+make format        # black + ruff --fix
+make typecheck     # mypy src/gaze_estimation
+make check         # lint + typecheck + tests — exactly what CI enforces
+```
+
+Git hooks (ruff, black, mypy plus whitespace/YAML/large-file checks):
+
+```bash
+make precommit-install   # once per clone
+make precommit           # run against the whole tree
+```
+
+CI (`.github/workflows/ci.yml`) runs on every push and pull request:
+
+| job | what it does |
+|-----|--------------|
+| `lint` | `ruff check` and `black --check`, with exact pinned tool versions |
+| `typecheck` | `mypy src/gaze_estimation` on Python 3.12 |
+| `test` | `pytest tests/` on Python 3.10, 3.11 and 3.12 |
+
+Python 3.9 is **not** supported: it is end-of-life and mypy 2.x cannot target it.
 
 ---
 

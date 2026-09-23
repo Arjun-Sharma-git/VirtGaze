@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Exact pins: the format/lint verdict must not change because a linter
+      # released while a PR was open.  Keep them in step with the bounds in
+      # pyproject.toml [project.optional-dependencies].
+      - run: pip install "ruff==0.16.8" "black==26.5.1"
+      - run: ruff check src tests scripts
+      - run: black --check src tests scripts
+
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # Run on the newest supported interpreter only: [tool.mypy] deliberately
+      # leaves python_version unset (see pyproject.toml), so mypy parses stubs
+      # using the grammar of the interpreter it runs under, and numpy's stubs
+      # need 3.12+ grammar.
+      - name: Install CPU-only PyTorch
+        # Plain `pip install torch` selects the CUDA wheel on Linux (~2 GB).
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[dev]"
+      - run: mypy src/gaze_estimation
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install --upgrade pip
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install the package
+        run: pip install -e ".[dev]"
+      - name: pytest
+        run: pytest tests/ -q

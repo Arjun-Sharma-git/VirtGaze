@@ -1,0 +1,40 @@
+# Pre-commit hooks — run `make precommit-install` once per clone to enable them.
+# Revisions are pinned to the versions this project was validated against; use
+# `pre-commit autoupdate` to bump them deliberately.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: mixed-line-ending
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(src|tests|scripts)/
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.5.1
+    hooks:
+      - id: black
+        files: ^(src|tests|scripts)/
+
+  # Type checks only src/: the tests use duck-typed stubs on purpose, and
+  # mypy has to be told to look at the whole package rather than one file at a
+  # time (it needs the full module graph to resolve cross-module types).
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.1
+    hooks:
+      - id: mypy
+        files: ^src/
+        pass_filenames: false
+        args: [src/gaze_estimation]
+        additional_dependencies: ["numpy"]

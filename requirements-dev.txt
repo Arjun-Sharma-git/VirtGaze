@@ -11,3 +11,6 @@ mypy>=1.11,<3
 # Linting / formatting
 ruff>=0.8,<1
 black>=24.0.0,<27
+
+# Git hooks
+pre-commit>=3.5,<5

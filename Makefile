@@ -1,4 +1,4 @@
-.PHONY: install install-dev lint format typecheck test test-cov clean run-tracker run-calibration export-model
+.PHONY: install install-dev lint format typecheck check test test-cov clean run-tracker run-calibration export-model precommit precommit-install
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
 install:
@@ -28,6 +28,17 @@ format:
 
 typecheck:
 	mypy src/gaze_estimation
+
+# Everything CI enforces, in one command
+check: lint typecheck
+	pytest tests/ -q
+
+# ─── Git hooks ────────────────────────────────────────────────────────────────
+precommit-install:
+	pre-commit install
+
+precommit:
+	pre-commit run --all-files
 
 # ─── Testing ──────────────────────────────────────────────────────────────────
 test:
