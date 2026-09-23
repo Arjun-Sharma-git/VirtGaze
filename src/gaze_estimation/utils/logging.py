@@ -5,7 +5,6 @@ import logging
 import sys
 from typing import Optional
 
-
 _ROOT_LOGGER_NAME = "gaze_estimation"
 
 

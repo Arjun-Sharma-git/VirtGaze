@@ -32,9 +32,8 @@ def main() -> None:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
     import cv2
-    from gaze_estimation.utils.camera_calibration import (
-        calibrate_from_images, save_intrinsics
-    )
+
+    from gaze_estimation.utils.camera_calibration import calibrate_from_images, save_intrinsics
 
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():

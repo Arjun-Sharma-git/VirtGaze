@@ -54,7 +54,7 @@ class StageTimer:
         self.last_ms: float = 0.0
         self._history: deque = deque(maxlen=100)
 
-    def __enter__(self) -> "StageTimer":
+    def __enter__(self) -> StageTimer:
         self._start = time.monotonic()
         return self
 

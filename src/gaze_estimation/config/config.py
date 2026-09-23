@@ -24,12 +24,12 @@ class Config:
     raw: dict = field(default_factory=dict)
 
     @classmethod
-    def default(cls) -> "Config":
+    def default(cls) -> Config:
         """Load the built-in default configuration."""
         return cls.from_yaml("")
 
     @classmethod
-    def from_yaml(cls, path: str) -> "Config":
+    def from_yaml(cls, path: str) -> Config:
         """Load a YAML file, merged on top of defaults."""
         default_raw: dict = {}
         if _DEFAULT_CONFIG_PATH.exists():

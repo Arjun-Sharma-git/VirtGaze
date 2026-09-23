@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from gaze_estimation.gaze.gaze_features import FeatureExtractor
-from gaze_estimation.pipeline.schemas import FEATURE_KEYS, FEATURE_DIM
+from gaze_estimation.pipeline.schemas import FEATURE_DIM, FEATURE_KEYS
 
 
 @pytest.fixture

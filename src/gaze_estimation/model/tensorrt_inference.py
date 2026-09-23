@@ -29,9 +29,9 @@ class TensorRTInference:
 
     def __init__(self, engine_path: str, input_dim: int = 34) -> None:
         try:
-            import tensorrt as trt  # type: ignore[import]
-            import pycuda.driver as cuda  # type: ignore[import]
             import pycuda.autoinit  # type: ignore[import]  # noqa: F401
+            import pycuda.driver as cuda  # type: ignore[import]
+            import tensorrt as trt  # type: ignore[import]
         except ImportError as exc:
             raise RuntimeError(
                 "TensorRT or PyCUDA not installed. "

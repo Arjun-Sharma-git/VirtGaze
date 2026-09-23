@@ -1,7 +1,7 @@
 """OverlayRenderer: draws gaze point, face mesh, and debug info on BGR frames."""
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import cv2
 import numpy as np

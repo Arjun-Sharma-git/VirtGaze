@@ -21,6 +21,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "scipy>=1.10.0",
     "pygame>=2.5.0",
+    "screeninfo>=0.8.1",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +57,13 @@ target-version = ["py39"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
+# Declare the rule set explicitly.  The previous unpinned `ruff>=0.1.0`
+# dependency let ruff's default set grow on every release — ruff 0.16 flags
+# >200 issues (pyupgrade modernisations, magic-value checks, …) that this
+# project never opted into.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.mypy]
 python_version = "3.9"

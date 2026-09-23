@@ -1,12 +1,10 @@
 """Camera intrinsics utilities: estimation from frame size and chessboard calibration."""
 from __future__ import annotations
 
-import math
 from typing import Optional
 
 import cv2
 import numpy as np
-
 
 # ── Quick estimation ──────────────────────────────────────────────────────────
 

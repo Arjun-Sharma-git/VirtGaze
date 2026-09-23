@@ -6,11 +6,18 @@ from typing import Optional, Tuple
 import numpy as np
 
 from gaze_estimation.pipeline.schemas import (
-    FEATURE_KEYS, GazeRay, HeadPose, empty_features,
+    FEATURE_KEYS,
+    GazeRay,
+    HeadPose,
+    empty_features,
 )
 from gaze_estimation.pose.canonical_face import (
-    LEFT_EYE_INDICES, LEFT_EYE_INNER, LEFT_EYE_OUTER,
-    RIGHT_EYE_INDICES, RIGHT_EYE_INNER, RIGHT_EYE_OUTER,
+    LEFT_EYE_INDICES,
+    LEFT_EYE_INNER,
+    LEFT_EYE_OUTER,
+    RIGHT_EYE_INDICES,
+    RIGHT_EYE_INNER,
+    RIGHT_EYE_OUTER,
 )
 from gaze_estimation.utils.geometry import eye_aspect_ratio, ray_to_angles
 

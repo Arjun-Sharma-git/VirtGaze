@@ -6,7 +6,6 @@ import time
 import numpy as np
 import pytest
 
-
 # ── Synthetic data ────────────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -55,7 +54,7 @@ def mock_head_pose():
 @pytest.fixture
 def calibration_samples():
     """200 synthetic CalibrationSamples for MLP training tests."""
-    from gaze_estimation.pipeline.schemas import CalibrationSample, FEATURE_KEYS
+    from gaze_estimation.pipeline.schemas import FEATURE_KEYS, CalibrationSample
     rng = np.random.default_rng(99)
     samples = []
     for _ in range(200):

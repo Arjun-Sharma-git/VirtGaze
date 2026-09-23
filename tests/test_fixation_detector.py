@@ -1,8 +1,6 @@
 """Tests for the fixation / saccade state machine."""
 from __future__ import annotations
 
-import pytest
-
 from gaze_estimation.filtering.fixation_detector import FixationDetector
 from gaze_estimation.pipeline.schemas import GazeState
 
