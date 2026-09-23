@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    from gaze_estimation.model.mlp import GazeMLP
 
 
-def export_to_onnx(model: "GazeMLP", path: str, input_dim: int = 34) -> None:  # type: ignore[name-defined]
+def export_to_onnx(model: GazeMLP, path: str, input_dim: int = 34) -> None:
     """Export *model* to ONNX at *path*.
+
+    The exported graph expects the **normalised** feature vector produced by
+    :meth:`MLPTrainer.features_dict_to_vector` — normalisation is deliberately
+    not part of the graph, so callers must apply it before inference.
 
     Args:
         model:     Trained GazeMLP in eval mode.

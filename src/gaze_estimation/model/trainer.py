@@ -9,6 +9,31 @@ import numpy as np
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.pipeline.schemas import FEATURE_DIM, FEATURE_KEYS
 from gaze_estimation.utils.device import get_torch_device
+from gaze_estimation.utils.logging import get_logger
+
+_logger = get_logger("model.trainer")
+
+
+def _to_tensor(array: Optional[np.ndarray]):
+    """Convert a normalisation-statistics array to a float32 tensor.
+
+    Tensors (unlike raw numpy arrays) are accepted by the ``weights_only=True``
+    unpickler used by :meth:`MLPTrainer.load`.
+    """
+    if array is None:
+        return None
+    import torch
+    return torch.as_tensor(np.asarray(array, dtype=np.float32))
+
+
+def _from_checkpoint(value: object) -> Optional[np.ndarray]:
+    """Convert a checkpoint value (tensor or array) back to a float32 array."""
+    if value is None:
+        return None
+    import torch
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy().astype(np.float32)
+    return np.asarray(value, dtype=np.float32)
 
 
 class MLPTrainer:
@@ -66,6 +91,7 @@ class MLPTrainer:
         screen_width: int = 1920,
         screen_height: int = 1080,
         existing_model: Optional[GazeMLP] = None,
+        refit_normalisation: bool = True,
     ) -> GazeMLP:
         """Train a GazeMLP.
 
@@ -75,19 +101,29 @@ class MLPTrainer:
             screen_width:   Screen resolution width (for label normalisation).
             screen_height:  Screen resolution height.
             existing_model: Fine-tune this model instead of creating a new one.
+            refit_normalisation: Recompute the feature z-score statistics from
+                            *X*.  Must be ``False`` when fine-tuning on a small
+                            batch, otherwise the statistics the live model
+                            depends on are overwritten with biased ones.
 
         Returns:
             Trained GazeMLP (in eval mode, on CPU).
         """
         import torch
-        import torch.nn as nn
+        from torch import nn
         from torch.utils.data import DataLoader, TensorDataset
 
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        # Normalise features
-        X_norm = self._normalise_features(X, fit=True)
+        # Only fit the normaliser on a full (re)calibration, or when no
+        # statistics exist yet.
+        fit_norm = (
+            refit_normalisation
+            or self.feature_mean is None
+            or self.feature_std is None
+        )
+        X_norm = self._normalise_features(X, fit=fit_norm)
 
         # Normalise labels to [0, 1]
         Y_norm = Y.copy().astype(np.float32)
@@ -167,17 +203,37 @@ class MLPTrainer:
         epochs: int = 3,
         lr: Optional[float] = None,
     ) -> GazeMLP:
-        """Fine-tune an existing model on a small batch of new data."""
-        return self.train(
-            X, Y,
-            self.screen_width, self.screen_height,
-            existing_model=model,
-        )
+        """Fine-tune an existing model on a small batch of new data.
+
+        The stored feature-normalisation statistics are **kept** (not refit),
+        and *lr* (when given) overrides the trainer learning rate for the
+        duration of the fine-tune only.
+        """
+        orig_epochs = self.epochs
+        orig_lr = self.lr
+        self.epochs = epochs
+        if lr is not None:
+            self.lr = lr
+        try:
+            return self.train(
+                X, Y,
+                self.screen_width, self.screen_height,
+                existing_model=model,
+                refit_normalisation=False,
+            )
+        finally:
+            self.epochs = orig_epochs
+            self.lr = orig_lr
 
     # ── Serialisation ──────────────────────────────────────────────────────
 
     def save(self, model: GazeMLP, path: str) -> None:
-        """Save model weights + normaliser statistics + config to a .pt file."""
+        """Save model weights + normaliser statistics + config to a .pt file.
+
+        Normalisation statistics are stored as tensors (not raw numpy arrays)
+        so the checkpoint can be read back with
+        ``torch.load(..., weights_only=True)``.
+        """
         import torch
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         torch.save(
@@ -185,21 +241,31 @@ class MLPTrainer:
                 "state_dict": model.state_dict(),
                 "input_dim": model.input_dim,
                 "hidden_dims": list(model.hidden_dims),
-                "feature_mean": self.feature_mean,
-                "feature_std": self.feature_std,
+                "feature_mean": _to_tensor(self.feature_mean),
+                "feature_std": _to_tensor(self.feature_std),
                 "screen_width": self.screen_width,
                 "screen_height": self.screen_height,
             },
             path,
         )
 
-    def load(self, path: str) -> Tuple["GazeMLP", "MLPTrainer"]:
+    def load(self, path: str) -> Tuple[GazeMLP, MLPTrainer]:
         """Load a GazeMLP and restore trainer normalisation stats.
 
         Returns (model, trainer_with_stats).
         """
         import torch
-        ckpt = torch.load(path, map_location="cpu")
+
+        try:
+            ckpt = torch.load(path, map_location="cpu", weights_only=True)
+        except Exception:
+            # Legacy checkpoints stored raw numpy arrays, which the
+            # weights_only unpickler refuses.  Only fall back for trusted files.
+            _logger.warning(
+                "Falling back to weights_only=False for legacy checkpoint: %s", path
+            )
+            ckpt = torch.load(path, map_location="cpu", weights_only=False)
+
         model = GazeMLP(
             input_dim=ckpt.get("input_dim", FEATURE_DIM),
             hidden_dims=ckpt.get("hidden_dims", [64, 128, 64]),
@@ -211,8 +277,8 @@ class MLPTrainer:
             input_dim=model.input_dim,
             hidden_dims=list(model.hidden_dims),
         )
-        trainer.feature_mean = ckpt.get("feature_mean")
-        trainer.feature_std = ckpt.get("feature_std")
+        trainer.feature_mean = _from_checkpoint(ckpt.get("feature_mean"))
+        trainer.feature_std = _from_checkpoint(ckpt.get("feature_std"))
         trainer.screen_width = ckpt.get("screen_width", 1920)
         trainer.screen_height = ckpt.get("screen_height", 1080)
         return model, trainer

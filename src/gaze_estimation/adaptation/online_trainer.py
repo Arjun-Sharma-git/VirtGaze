@@ -1,8 +1,6 @@
 """Online incremental MLP fine-tuner using click-based adaptation samples."""
 from __future__ import annotations
 
-from typing import Optional
-
 from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.model.trainer import MLPTrainer
@@ -89,6 +87,7 @@ class OnlineTrainer:
                 screen_width=self._screen_width,
                 screen_height=self._screen_height,
                 existing_model=self._mlp,
+                refit_normalisation=False,
             )
         except Exception as exc:
             _logger.error("Fine-tuning failed: %s", exc)

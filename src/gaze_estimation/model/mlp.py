@@ -1,12 +1,15 @@
 """GazeMLP: tiny personalized MLP that maps 34 features -> (screen_x, screen_y)."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from gaze_estimation.pipeline.schemas import FEATURE_DIM
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class GazeMLP(nn.Module):
@@ -56,9 +59,8 @@ class GazeMLP(nn.Module):
         """
         return self.net(x)
 
-    def predict_numpy(self, features_np) -> "np.ndarray":  # type: ignore[name-defined]
+    def predict_numpy(self, features_np) -> np.ndarray:
         """Convenience predict for a (1, 34) numpy array.  Returns (1, 2) numpy."""
-        import numpy as np
         self.eval()
         with torch.no_grad():
             x = torch.from_numpy(features_np.astype("float32"))

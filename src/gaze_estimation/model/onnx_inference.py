@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import numpy as np
 
@@ -28,6 +27,7 @@ class ONNXInference:
 
     def __init__(self, model_path: str, device: str = "CPU") -> None:
         import onnxruntime as ort
+
         from gaze_estimation.utils.device import get_onnx_providers
 
         providers = get_onnx_providers(device)
@@ -70,13 +70,24 @@ class ONNXInference:
         return self._session.run(None, {self._input_name: x})[0]
 
     def predict_dict(
-        self, features_dict: dict, feature_keys: list
+        self, features_dict: dict, feature_keys: list, mean=None, std=None
     ) -> np.ndarray:
-        """Predict from a feature dict (keyed by FEATURE_KEYS)."""
-        vec = np.array(
+        """Predict from a feature dict (keyed by ``FEATURE_KEYS``).
+
+        The exported ONNX graph contains **no** feature normalisation, so the
+        z-score statistics stored in the ``MLPTrainer`` must be supplied for
+        the prediction to be correct.  Prefer
+        ``trainer.features_dict_to_vector(features)`` followed by
+        :meth:`predict`, which applies them automatically.
+        """
+        raw = np.array(
             [features_dict.get(k, 0.0) for k in feature_keys], dtype=np.float32
         ).reshape(1, -1)
-        return self.predict(vec)
+        if mean is not None and std is not None:
+            raw = (raw - np.asarray(mean, dtype=np.float32)) / np.asarray(
+                std, dtype=np.float32
+            )
+        return self.predict(raw)
 
     # ── Info ──────────────────────────────────────────────────────────────
 
