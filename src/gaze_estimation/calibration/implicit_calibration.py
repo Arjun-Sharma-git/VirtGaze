@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
-from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
 from gaze_estimation.adaptation.online_trainer import OnlineTrainer
 from gaze_estimation.utils.logging import get_logger
 
@@ -32,11 +31,16 @@ class ImplicitCalibration:
         self,
         online_trainer: OnlineTrainer,
         click_velocity_threshold: float = 500.0,
+        on_retrain: Optional[Callable[[], None]] = None,
     ) -> None:
         self._trainer = online_trainer
         self._click_vel_threshold = click_velocity_threshold
+        # Called after a successful fine-tune so the caller can publish the
+        # updated model to the live pipeline.
+        self._on_retrain = on_retrain
         self._total_clicks = 0
         self._skipped_clicks = 0
+        self._retrain_count = 0
         self._prev_cursor: Optional[Tuple[float, float]] = None
         self._prev_cursor_time: Optional[float] = None
 
@@ -86,11 +90,17 @@ class ImplicitCalibration:
         # Trigger fine-tune if enough new samples
         retrained = self._trainer.maybe_retrain()
         if retrained:
+            self._retrain_count += 1
             _logger.info(
                 "Implicit calibration triggered fine-tune "
-                "(total clicks=%d, skipped=%d)",
-                self._total_clicks, self._skipped_clicks,
+                "(total clicks=%d, skipped=%d, retrains=%d)",
+                self._total_clicks, self._skipped_clicks, self._retrain_count,
             )
+            if self._on_retrain is not None:
+                try:
+                    self._on_retrain()
+                except Exception as exc:
+                    _logger.warning("on_retrain callback failed: %s", exc)
         return True
 
     @property
@@ -100,3 +110,8 @@ class ImplicitCalibration:
     @property
     def skipped_clicks(self) -> int:
         return self._skipped_clicks
+
+    @property
+    def retrain_count(self) -> int:
+        """Number of fine-tunes triggered by implicit calibration."""
+        return self._retrain_count

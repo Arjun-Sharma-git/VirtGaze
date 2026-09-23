@@ -1,7 +1,7 @@
 """Kappa angle estimation — offset between optical and visual axes."""
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -56,36 +56,69 @@ def estimate_kappa(
     return kappa_yaw, kappa_pitch
 
 
+# Anthropometric ratio: the eyeball radius is roughly twice the iris radius.
+# Human means: iris radius ≈ 5.8 mm, eyeball radius ≈ 12 mm.
+_IRIS_TO_EYEBALL_RATIO = 0.48
+
+# Plausible range for a human eyeball radius (mm).  Estimates outside this
+# range are rejected as unreliable.
+_EYEBALL_RADIUS_RANGE = (8.0, 20.0)
+
+
 def fit_eyeball_radius(
     samples: List[CalibrationSample],
     default_radius: float = 12.0,
+    focal_length_px: Optional[float] = None,
+    frame_width_px: Optional[int] = None,
 ) -> float:
-    """Fit the eyeball radius from calibration data.
+    """Estimate the eyeball radius (mm) from calibration data.
 
-    Uses the relationship between iris radius (pixels) and gaze angle:
-    as gaze angle increases, the apparent iris radius decreases.
-    This is a simple average-based estimate; for production use a proper
-    regression.
+    The iris radius stored in the feature vector is *normalised by the frame
+    width*, so it is dimensionless.  Converting it to millimetres requires the
+    camera focal length and the frame width:
+
+        L_iris_mm = r_norm * frame_width_px * z_mm / f_px
+
+    where ``z_mm`` is the eye-to-camera distance, taken from the head-pose
+    translation (``head_tz``).  The eyeball radius then follows from the
+    anthropometric ratio ``R_eyeball ≈ L_iris / 0.48``.
+
+    If the intrinsics are not supplied, or too little valid data is available,
+    *default_radius* is returned.  (The previous implementation multiplied a
+    normalised pixel radius by 1000 × 12, which was dimensionally meaningless
+    and produced garbage radii that were persisted into the user profile.)
 
     Args:
-        samples:        Calibration samples.
-        default_radius: Return this if estimation fails (12 mm is typical).
+        samples:         Calibration samples.
+        default_radius:  Fallback eyeball radius in mm (12 mm is typical).
+        focal_length_px: Camera focal length in pixels (``camera_matrix[0, 0]``).
+        frame_width_px:  Capture frame width in pixels.
 
     Returns:
         Estimated eyeball radius in mm.
     """
-    radii = []
+    if not samples or focal_length_px is None or frame_width_px is None:
+        return float(default_radius)
+    if focal_length_px <= 0.0 or frame_width_px <= 0:
+        return float(default_radius)
+
+    estimates: List[float] = []
     for s in samples:
-        lr = s.features.get("left_iris_radius", 0.0)
-        rr = s.features.get("right_iris_radius", 0.0)
-        # Only count when iris is visible (non-zero normalised radius)
-        if lr > 1e-4:
-            radii.append(lr)
-        if rr > 1e-4:
-            radii.append(rr)
+        z_mm = float(s.features.get("head_tz", 0.0))
+        if z_mm <= 1.0:
+            continue
+        for key in ("left_iris_radius", "right_iris_radius"):
+            r_norm = float(s.features.get(key, 0.0))
+            if r_norm <= 1e-4:
+                continue
+            iris_mm = r_norm * float(frame_width_px) * z_mm / float(focal_length_px)
+            estimates.append(iris_mm / _IRIS_TO_EYEBALL_RATIO)
 
-    if not radii:
-        return default_radius
+    if not estimates:
+        return float(default_radius)
 
-    # Return the 25th percentile (near-frontal samples where iris is fullest)
-    return float(np.percentile(radii, 25)) * 1000.0 * default_radius
+    radius = float(np.median(estimates))
+    lo, hi = _EYEBALL_RADIUS_RANGE
+    if not np.isfinite(radius) or not lo <= radius <= hi:
+        return float(default_radius)
+    return radius

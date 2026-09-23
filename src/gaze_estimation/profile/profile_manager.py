@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 
@@ -146,9 +146,7 @@ class ProfileManager:
             return True
         if profile.camera_name != current_camera:
             return True
-        if list(profile.screen_resolution) != list(current_screen):
-            return True
-        return False
+        return list(profile.screen_resolution) != list(current_screen)
 
     def needs_quick_calibration(
         self,
@@ -166,7 +164,6 @@ class ProfileManager:
             last = datetime.fromisoformat(profile.last_session)
             now = datetime.now(timezone.utc)
             if last.tzinfo is None:
-                from datetime import timedelta
                 return True
             delta = now - last
             return delta.days >= days_since_last

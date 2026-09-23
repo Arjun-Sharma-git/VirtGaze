@@ -8,14 +8,54 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
+from gaze_estimation.correction.bias_map import BiasMap
 from gaze_estimation.gaze.kappa_compensation import estimate_kappa, fit_eyeball_radius
 from gaze_estimation.model.trainer import MLPTrainer
 from gaze_estimation.pipeline.schemas import (
-    CalibrationResult, CalibrationSample, GazePacket,
+    CalibrationResult,
+    CalibrationSample,
+    GazePacket,
 )
 from gaze_estimation.utils.logging import get_logger
 
 _logger = get_logger("calibration.engine")
+
+
+def build_residual_bias_map(
+    model,
+    trainer,
+    X: np.ndarray,
+    Y: np.ndarray,
+    screen_width: int,
+    screen_height: int,
+    cols: int = 40,
+    rows: int = 20,
+    smoothing: float = 1.0,
+):
+    """Build a residual :class:`BiasMap` from a model's own calibration errors.
+
+    The map stores the mean (target − prediction) error per screen region as
+    measured on the calibration targets, so that the model's residual spatial
+    bias can be corrected at inference time without retraining.
+
+    Returns ``None`` when the model cannot be evaluated.
+    """
+    try:
+        preds = model.predict_numpy(trainer.normalise(X))
+    except Exception as exc:
+        _logger.warning("Could not build bias map: %s", exc)
+        return None
+
+    bias_map = BiasMap(cols=cols, rows=rows, smoothing=smoothing)
+    bias_map.build_from_calibration(
+        preds[:, 0] * screen_width,
+        preds[:, 1] * screen_height,
+        Y[:, 0],
+        Y[:, 1],
+        screen_width,
+        screen_height,
+    )
+    return bias_map
 
 # Default screen margins as fraction of screen dimensions
 _MARGIN = 0.1   # 10% margin on each side → targets from 10% to 90%
@@ -49,6 +89,11 @@ class CalibrationEngine:
         target_duration_sec: float = 2.0,
         outlier_sigma: float = 2.0,
         mlp_trainer: Optional[MLPTrainer] = None,
+        camera_matrix: Optional[np.ndarray] = None,
+        frame_width: Optional[int] = None,
+        bias_map_cols: int = 40,
+        bias_map_rows: int = 20,
+        bias_map_smoothing: float = 1.0,
     ) -> None:
         self.screen_width = screen_width
         self.screen_height = screen_height
@@ -58,6 +103,11 @@ class CalibrationEngine:
         self.target_duration_sec = target_duration_sec
         self.outlier_sigma = outlier_sigma
         self._trainer = mlp_trainer or MLPTrainer()
+        self._camera_matrix = camera_matrix
+        self._frame_width = frame_width
+        self._bias_map_cols = bias_map_cols
+        self._bias_map_rows = bias_map_rows
+        self._bias_map_smoothing = bias_map_smoothing
 
     # ── Main API ───────────────────────────────────────────────────────────
 
@@ -123,11 +173,22 @@ class CalibrationEngine:
             "Kappa: yaw=%.2f°  pitch=%.2f°", kappa_yaw, kappa_pitch
         )
 
-        # Fit eyeball radius
-        radius = fit_eyeball_radius(all_samples)
+        # Fit eyeball radius (needs camera intrinsics for a metric estimate;
+        # falls back to the anthropometric default when unavailable)
+        focal_px = (
+            float(self._camera_matrix[0, 0])
+            if self._camera_matrix is not None
+            else None
+        )
+        radius = fit_eyeball_radius(
+            all_samples,
+            focal_length_px=focal_px,
+            frame_width_px=self._frame_width,
+        )
 
-        # Train MLP
+        # Train MLP + build the residual bias map
         mlp_path = mlp_save_path
+        bias_map = None
         if all_samples:
             from gaze_estimation.pipeline.schemas import FEATURE_KEYS
             X = np.array(
@@ -143,18 +204,42 @@ class CalibrationEngine:
                 self._trainer.save(model, mlp_path)
                 _logger.info("MLP saved to %s", mlp_path)
 
+            bias_map = self._build_bias_map(model, X, Y)
+
         return CalibrationResult(
             samples=all_samples,
             mlp_weights_path=mlp_path,
             kappa_yaw=kappa_yaw,
             kappa_pitch=kappa_pitch,
             eyeball_radius=radius,
-            bias_map=None,
+            bias_map=bias_map,
             timestamp=time.time(),
             screen_resolution=(self.screen_width, self.screen_height),
         )
 
     # ── Private ────────────────────────────────────────────────────────────
+
+    def _build_bias_map(self, model, X: np.ndarray, Y: np.ndarray):
+        """Build a residual :class:`BiasMap` from the trained model's errors."""
+        bias_map = build_residual_bias_map(
+            model,
+            self._trainer,
+            X,
+            Y,
+            self.screen_width,
+            self.screen_height,
+            cols=self._bias_map_cols,
+            rows=self._bias_map_rows,
+            smoothing=self._bias_map_smoothing,
+        )
+        if bias_map is not None:
+            _logger.info(
+                "Bias map built (%dx%d grid, %d samples)",
+                self._bias_map_rows,
+                self._bias_map_cols,
+                len(X),
+            )
+        return bias_map
 
     def _collect_samples(
         self,

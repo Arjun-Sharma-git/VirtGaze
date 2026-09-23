@@ -36,9 +36,22 @@ class BiasMap:
         # Bias arrays in pixels (correction to add)
         self.bias_x = np.zeros((rows, cols), dtype=np.float32)
         self.bias_y = np.zeros((rows, cols), dtype=np.float32)
-        self.counts = np.zeros((rows, cols), dtype=np.int32)
+        # Accumulated bilinear weights per node (float, because samples are
+        # splatted onto the 4 surrounding nodes).
+        self.counts = np.zeros((rows, cols), dtype=np.float32)
 
     # ── Sample accumulation ───────────────────────────────────────────────
+
+    def _node_coords(self, screen_x: float, screen_y: float, screen_width: int, screen_height: int):
+        """Map a screen position to fractional grid-node coordinates.
+
+        Node ``k`` sits at ``k / (n - 1)`` (i.e. the grid spans the full screen
+        with nodes on both edges) — the same convention used by
+        :meth:`get_correction`.
+        """
+        gx = float(np.clip(screen_x / screen_width * (self.cols - 1), 0.0, self.cols - 1))
+        gy = float(np.clip(screen_y / screen_height * (self.rows - 1), 0.0, self.rows - 1))
+        return gx, gy
 
     def add_sample(
         self,
@@ -51,19 +64,41 @@ class BiasMap:
     ) -> None:
         """Add one observed error at a screen location.
 
+        The error is distributed over the four grid nodes surrounding the
+        sample using the same bilinear weights as :meth:`get_correction`, so
+        reading the map back at the same location reproduces the observed
+        error instead of an attenuated version of it.
+
         Args:
             screen_x, screen_y: Predicted gaze position in pixels.
             error_x, error_y:   True − predicted (pixels).
             screen_width/height: Screen resolution for normalisation.
         """
-        col = int(np.clip(screen_x / screen_width * self.cols, 0, self.cols - 1))
-        row = int(np.clip(screen_y / screen_height * self.rows, 0, self.rows - 1))
+        if self.cols < 2 or self.rows < 2:
+            raise ValueError("BiasMap requires at least a 2x2 grid")
 
-        # Running average
-        n = self.counts[row, col] + 1
-        self.bias_x[row, col] += (error_x - self.bias_x[row, col]) / n
-        self.bias_y[row, col] += (error_y - self.bias_y[row, col]) / n
-        self.counts[row, col] = n
+        gx, gy = self._node_coords(screen_x, screen_y, screen_width, screen_height)
+
+        x0 = int(np.clip(np.floor(gx), 0, self.cols - 2))
+        y0 = int(np.clip(np.floor(gy), 0, self.rows - 2))
+        x1, y1 = x0 + 1, y0 + 1
+        tx, ty = gx - x0, gy - y0
+
+        weighted_nodes = (
+            ((y0, x0), (1.0 - tx) * (1.0 - ty)),
+            ((y0, x1), tx * (1.0 - ty)),
+            ((y1, x0), (1.0 - tx) * ty),
+            ((y1, x1), tx * ty),
+        )
+
+        for (row, col), weight in weighted_nodes:
+            if weight <= 0.0:
+                continue
+            # Weighted running average: mean += w * (value - mean) / W_total
+            total = float(self.counts[row, col]) + weight
+            self.bias_x[row, col] += weight * (error_x - self.bias_x[row, col]) / total
+            self.bias_y[row, col] += weight * (error_y - self.bias_y[row, col]) / total
+            self.counts[row, col] = total
 
     def build_from_calibration(
         self,
@@ -98,9 +133,8 @@ class BiasMap:
         Returns:
             (dx, dy) correction to ADD to the raw prediction.
         """
-        # Map to fractional grid coordinates
-        gx = screen_x / screen_width * (self.cols - 1)
-        gy = screen_y / screen_height * (self.rows - 1)
+        # Map to fractional grid coordinates (nodes at k / (n - 1))
+        gx, gy = self._node_coords(screen_x, screen_y, screen_width, screen_height)
 
         # Bilinear interpolation
         x0 = int(np.clip(np.floor(gx), 0, self.cols - 2))
@@ -161,7 +195,7 @@ class BiasMap:
         data = np.load(path)
         self.bias_x = data["bias_x"].astype(np.float32)
         self.bias_y = data["bias_y"].astype(np.float32)
-        self.counts = data["counts"].astype(np.int32)
+        self.counts = data["counts"].astype(np.float32)
         meta = data.get("meta")
         if meta is not None:
             self.cols = int(meta[0])

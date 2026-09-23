@@ -6,11 +6,16 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
-from gaze_estimation.calibration.calibration_engine import CalibrationEngine, _drain
+from gaze_estimation.calibration.calibration_engine import (
+    _drain,
+    build_residual_bias_map,
+)
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.model.trainer import MLPTrainer
 from gaze_estimation.pipeline.schemas import (
-    CalibrationResult, CalibrationSample, GazePacket,
+    CalibrationResult,
+    CalibrationSample,
+    GazePacket,
 )
 from gaze_estimation.utils.logging import get_logger
 
@@ -75,6 +80,7 @@ class QuickCalibration:
             :class:`CalibrationResult` with updated kappa and model path.
         """
         import time
+
         from gaze_estimation.pipeline.schemas import FEATURE_KEYS
 
         targets = self.generate_targets()
@@ -136,6 +142,11 @@ class QuickCalibration:
         if mlp_save_path:
             self._trainer.save(model, mlp_save_path)
 
+        # Refresh the residual bias map for the fine-tuned model
+        bias_map = build_residual_bias_map(
+            model, self._trainer, X, Y, self.screen_width, self.screen_height
+        )
+
         from gaze_estimation.gaze.kappa_compensation import estimate_kappa
         kappa_yaw, kappa_pitch = estimate_kappa(
             all_samples, self.screen_width, self.screen_height
@@ -147,7 +158,7 @@ class QuickCalibration:
             kappa_yaw=kappa_yaw,
             kappa_pitch=kappa_pitch,
             eyeball_radius=12.0,
-            bias_map=None,
+            bias_map=bias_map,
             timestamp=time.time(),
             screen_resolution=(self.screen_width, self.screen_height),
         )

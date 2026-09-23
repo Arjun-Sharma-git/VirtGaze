@@ -5,13 +5,22 @@ import math
 
 import numpy as np
 
-
 # ── Rotation matrix utilities ────────────────────────────────────────────────
 
 def rotation_matrix_to_euler(R: np.ndarray) -> np.ndarray:
     """Convert a 3x3 rotation matrix to [yaw, pitch, roll] in degrees.
 
-    Uses the ZYX (yaw-pitch-roll) decomposition convention.
+    Uses the ZYX decomposition ``R = Rz(yaw) @ Ry(pitch) @ Rx(roll)``, so the
+    returned angles are rotations about the **Z, Y and X** axes respectively:
+
+    - ``yaw``   — rotation about Z
+    - ``pitch`` — rotation about Y
+    - ``roll``  — rotation about X
+
+    Note that OpenCV camera coordinates are X-right, Y-down, Z-forward, so a
+    physical "head turning left/right" rotation lands in the ``pitch`` slot
+    when this is applied to a solvePnP result, and a head *tilt* lands in
+    ``yaw``.  Consumers needing physical head axes must map them explicitly.
     """
     sy = math.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
     singular = sy < 1e-6
@@ -107,13 +116,19 @@ def screen_to_angles(
 ) -> tuple[float, float]:
     """Convert a screen pixel position to gaze angles (yaw, pitch) in degrees.
 
+    Uses the same right/up-positive convention as :func:`ray_to_angles` and
+    :func:`angles_to_ray`, so the two can be compared directly (as
+    :func:`~gaze_estimation.gaze.kappa_compensation.estimate_kappa` does).
+    Note that ``pitch`` is therefore *negative* for a target below the screen
+    centre, even though the pixel Y coordinate grows downwards.
+
     Assumes the user is at *distance_mm* from the screen centre.
     *mm_per_px* is approximate (0.3 mm/px for a 24" 1080p display).
     """
     x_mm = (screen_x - screen_width / 2.0) * mm_per_px
     y_mm = (screen_y - screen_height / 2.0) * mm_per_px
     yaw = math.degrees(math.atan2(x_mm, distance_mm))
-    pitch = math.degrees(math.atan2(y_mm, distance_mm))
+    pitch = -math.degrees(math.atan2(y_mm, distance_mm))
     return float(yaw), float(pitch)
 
 
