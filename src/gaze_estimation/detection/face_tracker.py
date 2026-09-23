@@ -58,12 +58,19 @@ class FaceTracker:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, np.array([0.0, 60.0, 32.0]), np.array([180.0, 255.0, 255.0]))
         back_proj = cv2.calcBackProject([hsv], [0], self._hist, [0, 180], 1)
-        back_proj &= mask
+        # Mask out background pixels.  bitwise_and states the intent (and the
+        # dtype) explicitly, unlike the in-place ``&=`` operator.
+        back_proj = cv2.bitwise_and(back_proj, mask)
 
         try:
             _ret, track_window = cv2.meanShift(back_proj, self._window, self._term_crit)
-            self._window = track_window
-            return tuple(int(v) for v in track_window), 0.6  # type: ignore[return-value]
+            # meanShift returns a 4-element rect in OpenCV 4.x (historically 5,
+            # with a rotation term).  Unpack explicitly so the tracked window is
+            # always a plain (x, y, w, h) int tuple.
+            wx, wy, ww, wh = (int(v) for v in track_window[:4])
+            window = (wx, wy, ww, wh)
+            self._window = window
+            return window, 0.6
         except cv2.error:
             return self._window, 0.4
 

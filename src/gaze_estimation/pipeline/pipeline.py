@@ -5,7 +5,7 @@ import math
 import queue
 import threading
 import time
-from typing import Optional
+from typing import Optional, Protocol
 
 import numpy as np
 
@@ -31,6 +31,28 @@ from gaze_estimation.utils.logging import get_logger
 from gaze_estimation.utils.timing import FPSCounter, LatencyProfiler
 
 _logger = get_logger("pipeline")
+
+
+# The inference collaborators are duck-typed on purpose: importing torch (for
+# GazeMLP), onnxruntime or tensorrt at module level would make the whole package
+# depend on every optional backend.  These protocols give mypy the interfaces
+# without the imports.
+class _ModelLike(Protocol):
+    """In-process torch model."""
+
+    def predict_numpy(self, X: np.ndarray) -> np.ndarray: ...
+
+
+class _TrainerLike(Protocol):
+    """Trainer holding the feature-normalisation statistics."""
+
+    def features_dict_to_vector(self, features: dict) -> np.ndarray: ...
+
+
+class _PredictorLike(Protocol):
+    """External backend (ONNX Runtime / TensorRT)."""
+
+    def predict(self, X: np.ndarray) -> np.ndarray: ...
 
 
 def _drain_latest(q: queue.Queue) -> Optional[object]:
@@ -85,9 +107,9 @@ class InferenceStage(StageThread):
         self._config = config
         self._screen_width = screen_width
         self._screen_height = screen_height
-        self._model = None            # Torch GazeMLP
-        self._trainer = None          # Holds feature-normalisation statistics
-        self._predictor = None        # Optional external backend (ONNX/TensorRT)
+        self._model: Optional[_ModelLike] = None        # Torch GazeMLP
+        self._trainer: Optional[_TrainerLike] = None    # Feature normalisation stats
+        self._predictor: Optional[_PredictorLike] = None  # ONNX / TensorRT backend
         self._source_name = "mlp"     # Reported in GazeEstimate.source
         self._bias_map = None         # Optional BiasMap spatial correction
         self._conf_threshold = float(config.get("inference.confidence_threshold", 0.7))
@@ -137,21 +159,27 @@ class InferenceStage(StageThread):
         source = "hold"
         screen_x, screen_y = self._screen_width / 2, self._screen_height / 2
         confidence = item.confidence
-        has_model = self._trainer is not None and (
-            self._predictor is not None or self._model is not None
-        )
+
+        # Bind the collaborators to locals: mypy narrows locals reliably, while
+        # attribute narrowing does not always survive intervening calls.
+        trainer = self._trainer
+        model = self._model
+        predictor = self._predictor
+        has_model = trainer is not None and (predictor is not None or model is not None)
         # Set when this packet should be projected geometrically.  The model
         # path may also set it, on failure, so that the fallback still applies
         # when the model is confident but throws.
         use_geometric = False
 
         if confidence >= self._conf_threshold and has_model:
+            assert trainer is not None          # implied by has_model
             try:
-                x_norm = self._trainer.features_dict_to_vector(item.features)
-                if self._predictor is not None:
-                    out = self._predictor.predict(x_norm)
+                x_norm = trainer.features_dict_to_vector(item.features)
+                if predictor is not None:
+                    out = predictor.predict(x_norm)
                 else:
-                    out = self._model.predict_numpy(x_norm)
+                    assert model is not None    # implied by has_model
+                    out = model.predict_numpy(x_norm)
                 screen_x = float(out[0, 0]) * self._screen_width
                 screen_y = float(out[0, 1]) * self._screen_height
                 source = self._source_name

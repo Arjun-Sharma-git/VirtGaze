@@ -84,9 +84,12 @@ class ONNXInference:
             [features_dict.get(k, 0.0) for k in feature_keys], dtype=np.float32
         ).reshape(1, -1)
         if mean is not None and std is not None:
-            raw = (raw - np.asarray(mean, dtype=np.float32)) / np.asarray(
-                std, dtype=np.float32
-            )
+            # Keep the result float32.  The ONNX graph's input is float32, and
+            # dividing by a float64 std would silently promote the array, which
+            # ORT then rejects as an input-type mismatch.
+            mean_arr = np.asarray(mean, dtype=np.float32)
+            std_arr = np.asarray(std, dtype=np.float32)
+            raw = ((raw - mean_arr) / std_arr).astype(np.float32)
         return self.predict(raw)
 
     # ── Info ──────────────────────────────────────────────────────────────

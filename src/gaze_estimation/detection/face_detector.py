@@ -187,7 +187,8 @@ class FaceDetector(StageThread):
     ) -> Optional[Tuple[tuple, float, Optional[np.ndarray]]]:
         """Haar-cascade fallback if MediaPipe is not available."""
         cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            # cv2.data exists at runtime but is absent from the OpenCV stubs.
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"  # type: ignore[attr-defined]
         )
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))

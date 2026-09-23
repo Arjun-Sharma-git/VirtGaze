@@ -25,9 +25,11 @@ def export_to_onnx(model: GazeMLP, path: str, input_dim: int = 34) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     model.eval()
     dummy_input = torch.randn(1, input_dim)
+    # torch.onnx.export accepts a Tensor as arg 2; its stubs mistype it as a
+    # tuple of positional args.
     torch.onnx.export(
         model,
-        dummy_input,
+        dummy_input,  # type: ignore[arg-type]
         path,
         input_names=["features"],
         output_names=["screen_coords"],
