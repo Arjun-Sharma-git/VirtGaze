@@ -1,5 +1,10 @@
 # Example user config — override any keys from default_config.yaml
 # Copy this file and edit it:  cp configs/example_config.yaml configs/my_config.yaml
+#
+# This file shows a few common overrides.  The full set of 71 options, with
+# comments, lives in src/gaze_estimation/config/default_config.yaml — that file is
+# the authoritative list, and tests/test_config_drift.py fails if any key in it
+# stops being read by the code.
 
 camera:
   index: 0          # Webcam device index

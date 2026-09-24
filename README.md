@@ -12,6 +12,10 @@ A production-grade real-time 3D gaze estimation system from a standard webcam, t
 | Inference FPS (CPU) | 60 |
 | Inference FPS (GPU) | 120 |
 
+These are **design targets, not measured results** — accuracy depends on your camera,
+lighting and calibration quality. Measure them on your hardware with
+`scripts/benchmark_accuracy.py` and `scripts/benchmark_latency.py`.
+
 ---
 
 ## Architecture
@@ -22,6 +26,21 @@ Camera → Face Detection → Face Mesh + Iris → Head Pose (solvePnP)
 ```
 
 All pipeline stages run on separate threads with bounded queues for natural backpressure and low latency.
+
+### Coordinate frames
+
+Gaze directions are expressed in two different frames, and confusing them silently
+breaks both calibration and the uncalibrated cursor:
+
+| Value | Frame | Why |
+|---|---|---|
+| `GazeRay.direction` (`gaze_ray_left/right`) | **head** | Eye-in-head direction. The MLP features (`gaze_yaw_avg`, `gaze_pitch_avg`, …) are derived from it, which is what makes the learned mapping invariant to head pose |
+| `GazePacket.gaze_yaw` / `gaze_pitch` | **camera** | Kappa is applied in the head frame, then the direction is rotated by the head rotation. The geometric screen fallback projects these onto the screen plane |
+| `CalibrationSample.gaze_yaw_world` / `gaze_pitch_world` | **camera** | Recorded next to the target so `estimate_kappa` compares screen-referenced angles with screen-referenced angles, instead of absorbing head rotation into kappa |
+| `HeadPose.euler_angles` | — | `[yaw, pitch, roll]` following `R = Rz·Ry·Rx`. Note the camera frame has **Y down and Z forward**, so a physical head *turn* about the vertical axis is a rotation about Y and lands in `euler_angles[1]`, the slot labelled "pitch". `rotation_matrix_to_euler` is verified against `scipy`'s `as_euler("zyx")` |
+
+`inference.fallback_to_geometric` therefore consumes camera-frame angles, while a
+person model is trained on head-frame features — that split is deliberate.
 
 ---
 
@@ -500,4 +519,8 @@ print(is_rocm())   # True on ROCm build
 
 ## Implementation Plan
 
-See [`docs/GAZE_ESTIMATION_PLAN.md`](docs/GAZE_ESTIMATION_PLAN.md) for the full specification.
+See [`docs/GAZE_ESTIMATION_PLAN.md`](docs/GAZE_ESTIMATION_PLAN.md) for the original
+design specification (theory, module rationale, calibration protocol). It was
+written before the code and is kept as design rationale — it is **not** a
+description of the current system, and it opens with a list of divergences. This
+README and the sources are authoritative for current behaviour.

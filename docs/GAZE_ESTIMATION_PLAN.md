@@ -4,6 +4,43 @@
 
 ---
 
+> ## Status: historical design specification — the code is authoritative
+>
+> This document was written **before** the implementation and is kept for its design
+> rationale. It is **not** a description of the current system: the sources under
+> `src/gaze_estimation/` are the source of truth, and [`README.md`](../README.md)
+> documents current behaviour. Read this for *why* things are shaped as they are,
+> not for *what* the APIs look like.
+>
+> ### Known divergences
+>
+> - **The phase checkboxes in §13 are the original roadmap, not a status tracker.**
+>   They all remain unchecked although every phase is implemented; the test suite
+>   (612 tests) is the live signal. `setup.py` was also dropped in favour of
+>   `pyproject.toml` alone.
+> - **Coordinate frames.** §5.5 gives `GazeRay.direction` as "camera frame", which
+>   contradicts §3 and §5.5's own `_compute_gaze_ray` docstring. The **head frame**
+>   is correct: rays and MLP features are head-frame (head-pose invariant) while
+>   `GazePacket.gaze_yaw/gaze_pitch` are camera-frame with kappa applied. §7's
+>   "apply kappa compensation to optical axis, then transform the visual axis to
+>   the camera frame using head pose" describes exactly what the code does.
+> - **Schemas gained fields** not listed in §6: `PosePacket.face_bbox`,
+>   `CalibrationSample.gaze_yaw_world`/`gaze_pitch_world`, and `GazePacket`'s frame
+>   annotations.
+> - **Code snippets are sketches, not shipped signatures.** Angle conversion moved to
+>   `utils.geometry.ray_to_angles`, feature extraction to
+>   `gaze_features.FeatureExtractor`, and `GazeGeometryEstimator` gained a `tap_queue`
+>   so calibration can observe packets without stealing them from the pipeline.
+> - **Features added beyond this plan:** runtime inference-backend selection
+>   (`model/backend.py`, `inference.backend`), residual spatial bias correction
+>   (`correction/bias_map.py`), click-based online adaptation, fixation-adaptive
+>   smoothing, in-place lens-distortion removal, and a live preview overlay.
+> - **Configuration is read from `config/default_config.yaml`**; every key there is
+>   consumed (guarded by `tests/test_config_drift.py`), and all are wired through to
+>   the objects that use them (guarded by `tests/test_config_wiring.py`).
+
+---
+
 ## Table of Contents
 
 1. [Project Overview & Goals](#1-project-overview--goals)
@@ -663,17 +700,17 @@ class HeadPoseEstimator(threading.Thread):
 ```python
 @dataclass
 class GazeRay:
-    origin: np.ndarray    # (3,) 3D point in camera frame
-    direction: np.ndarray # (3,) unit vector in camera frame
+    origin: np.ndarray    # (3,) 3D point in camera frame (the head translation)
+    direction: np.ndarray # (3,) unit vector in the HEAD frame (eye-in-head)
 
 @dataclass
 class GazePacket:
     timestamp: float
-    gaze_ray_left: GazeRay | None
-    gaze_ray_right: GazeRay | None
-    gaze_yaw: float       # Average gaze yaw (degrees)
-    gaze_pitch: float     # Average gaze pitch (degrees)
-    features: dict        # Full feature vector (FEATURE_KEYS)
+    gaze_ray_left: GazeRay | None   # head frame
+    gaze_ray_right: GazeRay | None  # head frame
+    gaze_yaw: float       # Average gaze yaw (degrees), CAMERA frame, kappa applied
+    gaze_pitch: float     # Average gaze pitch (degrees), CAMERA frame, kappa applied
+    features: dict        # Full feature vector (FEATURE_KEYS), head frame
     head_pose: HeadPose | None
     confidence: float
 
@@ -1831,6 +1868,10 @@ def put_or_drop(queue, item):
 ---
 
 ## 13. Implementation Roadmap
+
+> **Historical roadmap — every phase below is implemented.** The checkboxes were
+> never ticked as work progressed, so they are not a status indicator; see the
+> banner at the top of this document and the test suite for what actually exists.
 
 ### Phase 1: Core Pipeline (Week 1–2)
 
