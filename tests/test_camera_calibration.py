@@ -255,9 +255,22 @@ def test_calibration_result_is_usable_for_undistortion(chessboard_views):
 
 
 def test_square_size_scales_the_recovered_translation(chessboard_views):
-    """A larger square is the same geometry, so the intrinsics must not change."""
+    """A larger square is the same geometry, so the intrinsics must not change.
+
+    The two calibrations are nevertheless independent nonlinear least-squares
+    fits, so their converged coefficients differ in the last digits: the units
+    change the conditioning.  Measured noise on the same views is up to ~2.4e-7
+    relative (1.3e-5 absolute) and varies with the OpenCV/BLAS build — an earlier
+    `atol=1e-6` here failed on the Python 3.11 runner for exactly that reason.
+
+    ``rtol=1e-5`` keeps ~40x headroom over the observed noise while still
+    rejecting a real regression.  Measured on the same views: noise gives
+    ~5e-8 (and up to ~2.4e-7 for other square sizes), whereas calibrating from
+    *different* views moves the matrix by ~0.9 and the coefficients by ~2 in
+    relative terms — four orders of magnitude above this bound.
+    """
     small = calibrate_from_images(chessboard_views, BOARD_COLS, BOARD_ROWS, square_size_mm=10.0)
     large = calibrate_from_images(chessboard_views, BOARD_COLS, BOARD_ROWS, square_size_mm=50.0)
 
-    np.testing.assert_allclose(small[0], large[0], rtol=1e-6)
-    np.testing.assert_allclose(small[1], large[1], atol=1e-6)
+    np.testing.assert_allclose(small[0], large[0], rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(small[1], large[1], rtol=1e-5, atol=1e-6)
