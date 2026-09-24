@@ -135,6 +135,9 @@ class PosePacket:
     right_iris_radius: Optional[float]
     head_pose: Optional[HeadPose]
     confidence: float
+    # Carried through from MeshPacket: the gaze feature extractor needs the face
+    # box, and this stage is the only remaining holder of it downstream.
+    face_bbox: Optional[tuple] = None
 
 
 @dataclass

@@ -126,6 +126,7 @@ class HeadPoseEstimator(StageThread):
                 right_iris_radius=item.right_iris_radius,
                 head_pose=head_pose,
                 confidence=confidence if head_pose is not None else 0.0,
+                face_bbox=item.face_bbox,
             )
         )
 
