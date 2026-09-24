@@ -20,7 +20,7 @@ from gaze_estimation.pipeline.schemas import (
     HeadPose,
     PosePacket,
 )
-from gaze_estimation.utils.geometry import ray_to_angles, rotation_matrix_to_euler
+from gaze_estimation.utils.geometry import angles_to_ray, ray_to_angles, rotation_matrix_to_euler
 
 W, H = 640, 480
 CAM = np.array([[640.0, 0.0, W / 2], [0.0, 640.0, H / 2], [0.0, 0.0, 1.0]], dtype=np.float64)
@@ -299,3 +299,108 @@ def test_distortion_coefficients_are_applied():
     clean_ray = estimator._compute_gaze_ray(np.array([500.0, 200.0]), _head_pose())
 
     assert not np.allclose(distorted_ray.direction, clean_ray.direction)
+
+
+# ── Coordinate frames ─────────────────────────────────────────────────────────
+
+_HEAD_ROTATIONS = [(0.0, 0.0, 0.0), (0.0, 0.4, 0.0), (0.0, -0.5, 0.0), (0.3, 0.2, 0.0)]
+
+
+def test_packet_angles_are_camera_frame_not_head_frame():
+    """A fixed iris pixel is a fixed *world* direction, however the head is turned.
+
+    Regression: the packet used to carry head-frame angles, so the geometric
+    screen fallback read head rotation as gaze rotation — a turned head moved the
+    cursor even though the eye had not moved.
+    """
+    pixel = (500.0, 200.0)
+    world_angles = []
+    head_angles = []
+    for rotation in _HEAD_ROTATIONS:
+        estimator, _, q_out = _estimator()
+        estimator.process(
+            _pose_packet(head_pose=_head_pose(rot_vector=rotation), left=pixel, right=pixel)
+        )
+        packet = q_out.get_nowait()
+        world_angles.append((packet.gaze_yaw, packet.gaze_pitch))
+        head_angles.append(ray_to_angles(packet.gaze_ray_left.direction))
+
+    # Every head rotation yields the same world angle ...
+    for yaw, pitch in world_angles[1:]:
+        assert yaw == pytest.approx(world_angles[0][0], abs=1e-6)
+        assert pitch == pytest.approx(world_angles[0][1], abs=1e-6)
+    # ... while the head-frame angles differ by tens of degrees.
+    assert max(abs(h[0] - head_angles[0][0]) for h in head_angles) > 10.0
+
+
+def test_packet_angles_equal_the_head_angle_rotated_into_the_camera_frame():
+    rotation_vector = (0.3, 0.2, 0.0)
+    estimator, _, q_out = _estimator()
+    estimator.process(
+        _pose_packet(
+            head_pose=_head_pose(rot_vector=rotation_vector),
+            left=(500.0, 200.0),
+            right=(500.0, 200.0),
+        )
+    )
+    packet = q_out.get_nowait()
+
+    head_yaw, head_pitch = ray_to_angles(packet.gaze_ray_left.direction)
+    rotation = _head_pose(rot_vector=rotation_vector).rotation_matrix
+    expected = ray_to_angles(rotation @ angles_to_ray(head_yaw, head_pitch))
+
+    assert packet.gaze_yaw == pytest.approx(expected[0], abs=1e-9)
+    assert packet.gaze_pitch == pytest.approx(expected[1], abs=1e-9)
+
+
+def test_kappa_is_applied_in_the_head_frame_before_the_rotation():
+    """Kappa is an eye-fixed offset, so it must not be rotated as if it were gaze."""
+    rotation_vector = (0.0, 0.3, 0.0)
+    estimator, _, q_out = _estimator(kappa_yaw=4.0, kappa_pitch=-2.0)
+    estimator.process(
+        _pose_packet(
+            head_pose=_head_pose(rot_vector=rotation_vector),
+            left=(500.0, 200.0),
+            right=(500.0, 200.0),
+        )
+    )
+    packet = q_out.get_nowait()
+
+    head_yaw, head_pitch = ray_to_angles(packet.gaze_ray_left.direction)
+    rotation = _head_pose(rot_vector=rotation_vector).rotation_matrix
+    expected = ray_to_angles(rotation @ angles_to_ray(head_yaw + 4.0, head_pitch - 2.0))
+
+    assert packet.gaze_yaw == pytest.approx(expected[0], abs=1e-9)
+    assert packet.gaze_pitch == pytest.approx(expected[1], abs=1e-9)
+
+
+def test_unrotated_head_angles_are_unchanged_by_the_frame_conversion():
+    """With no rotation the packet still equals the head angle + kappa, exactly."""
+    estimator, _, q_out = _estimator(kappa_yaw=4.0, kappa_pitch=-2.0)
+    estimator.process(_pose_packet(left=(520.0, 300.0), right=(520.0, 300.0)))
+    packet = q_out.get_nowait()
+
+    head_yaw, head_pitch = ray_to_angles(packet.gaze_ray_left.direction)
+
+    assert packet.gaze_yaw == pytest.approx(head_yaw + 4.0, abs=1e-9)
+    assert packet.gaze_pitch == pytest.approx(head_pitch - 2.0, abs=1e-9)
+
+
+def test_rays_and_features_stay_head_frame_invariant():
+    """Only the packet angles moved: the MLP features must remain head-pose invariant."""
+    estimator, _, q_out = _estimator()
+    estimator.process(
+        _pose_packet(
+            head_pose=_head_pose(rot_vector=(0.0, 0.4, 0.0)),
+            left=(500.0, 200.0),
+            right=(500.0, 200.0),
+        )
+    )
+    packet = q_out.get_nowait()
+
+    head_yaw, head_pitch = ray_to_angles(packet.gaze_ray_left.direction)
+
+    assert packet.features["gaze_yaw_avg"] == pytest.approx(head_yaw, abs=1e-6)
+    assert packet.features["gaze_pitch_avg"] == pytest.approx(head_pitch, abs=1e-6)
+    # The feature is head-relative, so it differs from the camera-frame angle.
+    assert abs(head_yaw - packet.gaze_yaw) > 10.0

@@ -24,6 +24,13 @@ def estimate_kappa(
     2. Compare against the *measured* geometric (optical) gaze angles.
     3. The median difference is the kappa angle for that eye.
 
+    Both sides of the comparison must be expressed in the same frame, so the
+    sample's camera-frame angles (:attr:`CalibrationSample.gaze_yaw_world`) are
+    preferred.  The head-frame ``gaze_yaw_avg``/``gaze_pitch_avg`` features are
+    only used as a fallback for samples that do not carry world angles, because a
+    rotated head would otherwise be read as a rotated gaze and absorbed into
+    kappa.
+
     Args:
         samples:       List of CalibrationSample with known screen targets.
         screen_width:  Display resolution width in pixels.
@@ -46,8 +53,12 @@ def estimate_kappa(
             distance_mm,
             mm_per_px,
         )
-        optical_yaw = s.features.get("gaze_yaw_avg", 0.0)
-        optical_pitch = s.features.get("gaze_pitch_avg", 0.0)
+        if s.gaze_yaw_world is not None and s.gaze_pitch_world is not None:
+            optical_yaw = s.gaze_yaw_world
+            optical_pitch = s.gaze_pitch_world
+        else:
+            optical_yaw = s.features.get("gaze_yaw_avg", 0.0)
+            optical_pitch = s.features.get("gaze_pitch_avg", 0.0)
 
         kappa_yaws.append(target_yaw - optical_yaw)
         kappa_pitches.append(target_pitch - optical_pitch)

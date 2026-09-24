@@ -153,11 +153,11 @@ class GazePacket:
     """3D gaze geometry result + full feature vector."""
 
     timestamp: float
-    gaze_ray_left: Optional[GazeRay]
-    gaze_ray_right: Optional[GazeRay]
-    gaze_yaw: float
-    gaze_pitch: float
-    features: dict  # FEATURE_KEYS -> float
+    gaze_ray_left: Optional[GazeRay]  # eye-in-head direction (head frame)
+    gaze_ray_right: Optional[GazeRay]  # eye-in-head direction (head frame)
+    gaze_yaw: float  # CAMERA-frame yaw with kappa applied (screen-referenced)
+    gaze_pitch: float  # CAMERA-frame pitch with kappa applied
+    features: dict  # FEATURE_KEYS -> float (head-frame, kappa-free)
     head_pose: Optional[HeadPose]
     confidence: float
 
@@ -198,10 +198,17 @@ class GazeEstimate:
 class CalibrationSample:
     """One gaze sample collected during calibration."""
 
-    features: dict  # FEATURE_KEYS -> float
+    features: dict  # FEATURE_KEYS -> float (head-frame)
     screen_x: float  # Target screen X (pixels)
     screen_y: float  # Target screen Y (pixels)
     timestamp: float
+    # Camera-frame gaze angles measured while fixating this target.  Kappa
+    # estimation compares these against the screen-referenced target angles; the
+    # head-frame `features` above cannot be used for that, because a rotated head
+    # would be mistaken for a rotated gaze.  Optional so samples built by hand
+    # (or by older callers) still work.
+    gaze_yaw_world: Optional[float] = None
+    gaze_pitch_world: Optional[float] = None
 
 
 @dataclass

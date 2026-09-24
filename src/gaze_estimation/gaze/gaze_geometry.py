@@ -17,7 +17,7 @@ from gaze_estimation.pipeline.schemas import (
     PosePacket,
 )
 from gaze_estimation.pipeline.thread_base import StageThread
-from gaze_estimation.utils.geometry import normalize, ray_to_angles
+from gaze_estimation.utils.geometry import angles_to_ray, normalize, ray_to_angles
 
 
 class GazeGeometryEstimator(StageThread):
@@ -89,7 +89,9 @@ class GazeGeometryEstimator(StageThread):
                     item.head_pose,
                 )
 
-            # Compute yaw/pitch from average of available rays (+ kappa)
+            # Angles from the average of the available rays (+ kappa).  The rays
+            # themselves are eye-in-head (see _compute_gaze_ray), so these are
+            # head-frame angles.
             angles = []
             for ray in [gaze_ray_left, gaze_ray_right]:
                 if ray is not None:
@@ -99,8 +101,21 @@ class GazeGeometryEstimator(StageThread):
             if angles:
                 avg_yaw = float(np.mean([a[0] for a in angles]))
                 avg_pitch = float(np.mean([a[1] for a in angles]))
-                gaze_yaw = avg_yaw + self._kappa_yaw
-                gaze_pitch = avg_pitch + self._kappa_pitch
+                # Kappa is the offset between the optical and visual axes, which
+                # is fixed within the eye — so it is applied here, in the head
+                # frame, before the direction is rotated into the camera frame.
+                head_yaw = avg_yaw + self._kappa_yaw
+                head_pitch = avg_pitch + self._kappa_pitch
+                # The packet angles are consumed as *camera-frame* angles: the
+                # geometric screen fallback projects them onto the screen plane,
+                # and kappa estimation compares them with screen-referenced
+                # target angles.  Rotating the head-frame direction by the head
+                # rotation is what makes those two comparisons valid — without it
+                # a turned head is mistaken for a turned gaze.  The rays and the
+                # MLP feature vector stay head-frame on purpose, so the learned
+                # mapping is invariant to head pose.
+                world_ray = item.head_pose.rotation_matrix @ angles_to_ray(head_yaw, head_pitch)
+                gaze_yaw, gaze_pitch = ray_to_angles(world_ray)
 
         features = self._feature_extractor.extract(
             mesh_468=item.mesh_468,

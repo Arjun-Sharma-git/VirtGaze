@@ -260,6 +260,10 @@ class CalibrationEngine:
                     screen_x=target_x,
                     screen_y=target_y,
                     timestamp=packet.timestamp,
+                    # Camera-frame angles, so kappa estimation compares like with
+                    # like (see estimate_kappa).
+                    gaze_yaw_world=packet.gaze_yaw,
+                    gaze_pitch_world=packet.gaze_pitch,
                 )
             )
 

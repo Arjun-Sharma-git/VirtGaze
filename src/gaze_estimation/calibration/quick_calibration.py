@@ -131,6 +131,9 @@ class QuickCalibration:
                         screen_x=tx,
                         screen_y=ty,
                         timestamp=pkt.timestamp,
+                        # Camera-frame angles for kappa estimation.
+                        gaze_yaw_world=pkt.gaze_yaw,
+                        gaze_pitch_world=pkt.gaze_pitch,
                     )
                 )
             all_samples.extend(collected)

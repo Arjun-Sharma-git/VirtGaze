@@ -194,6 +194,14 @@ def test_full_session_uses_the_camera_matrix_when_supplied(fast_engine_time):
     assert engine.run(_filled_queue(20)).eyeball_radius > 0.0
 
 
+def test_full_session_records_the_world_gaze_angles(fast_engine_time):
+    """Kappa estimation needs the camera-frame angles alongside the head-frame features."""
+    result = _engine().run(_filled_queue(20))
+
+    assert all(s.gaze_yaw_world == pytest.approx(1.0) for s in result.samples)
+    assert all(s.gaze_pitch_world == pytest.approx(0.5) for s in result.samples)
+
+
 # ── QuickCalibration.run ──────────────────────────────────────────────────────
 
 
@@ -282,6 +290,13 @@ def test_quick_session_honours_the_configured_target_count(fast_quick_time):
     result = calibration.run(_filled_queue(9), existing_model=None)
 
     assert len(result.samples) == 9  # 3x3 grid x 1 sample
+
+
+def test_quick_session_records_the_world_gaze_angles(fast_quick_time):
+    result = _quick().run(_filled_queue(10), existing_model=_mlp())
+
+    assert all(s.gaze_yaw_world == pytest.approx(1.0) for s in result.samples)
+    assert all(s.gaze_pitch_world == pytest.approx(0.5) for s in result.samples)
 
 
 def test_quick_session_fine_tunes_the_existing_model_in_place(fast_quick_time):
