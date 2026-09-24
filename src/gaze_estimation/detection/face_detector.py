@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import queue
 import threading
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -27,6 +28,9 @@ _DEFAULT_DETECTION_MODEL = "mediapipe_short"
 
 # MediaPipe landmark indices used as face_landmarks_2d (for solvePnP seed)
 _MP_FACE_KEY_INDICES = [0, 1, 2, 3, 4, 5]  # 6 keypoints from mediapipe face detection
+
+# Haar cascade used only when MediaPipe is unavailable.
+_HAAR_CASCADE_XML = "haarcascade_frontalface_default.xml"
 
 
 def resolve_detection_model(model: str) -> Tuple[str, int]:
@@ -83,6 +87,9 @@ class FaceDetector(StageThread):
         self._frame_counter: int = 0
         self._prev_bbox: Optional[tuple] = None
         self._tracker = FaceTracker()  # Between-detection ROI tracking
+        # Haar fallback state (lazy, resolved once — see _load_cascade)
+        self._cascade: Any = None
+        self._cascade_resolved: bool = False
 
     # ── StageThread ────────────────────────────────────────────────────────
 
@@ -186,14 +193,51 @@ class FaceDetector(StageThread):
         self, frame: np.ndarray
     ) -> Optional[Tuple[tuple, float, Optional[np.ndarray]]]:
         """Haar-cascade fallback if MediaPipe is not available."""
-        # cv2.data exists at runtime but is missing from the OpenCV stubs, so
-        # reach it via getattr (which mypy types as Any).  A trailing
-        # `# type: ignore` would not survive this line being wrapped by black.
-        cascade_path = getattr(cv2, "data").haarcascades + "haarcascade_frontalface_default.xml"
-        cascade = cv2.CascadeClassifier(cascade_path)
+        cascade = self._load_cascade()
+        if cascade is None:
+            return None
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
         if len(faces) == 0:
             return None
         x, y, bw, bh = faces[0]
         return (int(x), int(y), int(bw), int(bh)), 0.5, None
+
+    def _load_cascade(self) -> Any:
+        """Load the Haar classifier once, or return None when unavailable.
+
+        OpenCV 5 removed both ``cv2.CascadeClassifier`` and the bundled cascade
+        XML files, so on that version this fallback cannot work at all.  Detect
+        that up front, warn once, and report "no face" instead of raising
+        ``AttributeError`` (which would make the stage drop every frame).
+
+        ``cv2.data`` and the classifier also exist at runtime but are missing
+        from some OpenCV stubs, so both are reached via ``getattr``.
+        """
+        if self._cascade_resolved:
+            return self._cascade
+        self._cascade_resolved = True
+
+        classifier_cls = getattr(cv2, "CascadeClassifier", None)
+        data_module = getattr(cv2, "data", None)
+        xml_dir = getattr(data_module, "haarcascades", None) if data_module is not None else None
+        xml_path = os.path.join(xml_dir, _HAAR_CASCADE_XML) if xml_dir else None
+
+        if classifier_cls is None or xml_path is None or not os.path.exists(xml_path):
+            self._logger.warning(
+                "Haar cascade fallback unavailable on OpenCV %s "
+                "(CascadeClassifier: %s, cascade file: %s). "
+                "Install mediapipe, or opencv-python<5 to keep this fallback.",
+                getattr(cv2, "__version__", "?"),
+                "present" if classifier_cls is not None else "missing",
+                xml_path if xml_path and os.path.exists(xml_path) else "missing",
+            )
+            self._cascade = None
+            return None
+
+        try:
+            self._cascade = classifier_cls(xml_path)
+        except Exception as exc:
+            self._logger.warning("Could not load Haar cascade %s: %s", xml_path, exc)
+            self._cascade = None
+        return self._cascade
