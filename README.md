@@ -312,6 +312,12 @@ python scripts/export_model.py --user alice --format tensorrt --output models/ga
 - ONNX Runtime ≥ 1.15
 - PyYAML, Pydantic ≥ 2.0, SciPy, Pygame, screeninfo
 
+OpenCV 5 is supported, with one caveat: it removed `cv2.CascadeClassifier` and
+the bundled cascade XML files, so the Haar detection fallback — used only when
+MediaPipe is unavailable — cannot work there. The detector logs a warning naming
+the version and reports no face rather than failing. Install `opencv-python<5`
+if you need that fallback.
+
 Optional NVIDIA GPU: `pip install tensorrt` (requires CUDA 11+)
 
 Optional AMD GPU: see ROCm section below.
