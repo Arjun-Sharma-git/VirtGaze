@@ -26,12 +26,15 @@ FRAME = np.full((H, W, 3), 64, dtype=np.uint8)
 class FakeCapture:
     """Records driver calls and returns queued frames."""
 
-    def __init__(self, opened=True, frames=None, fail_reads=0, size=(W, H), fps=30.0):
+    def __init__(
+        self, opened=True, frames=None, fail_reads=0, size=(W, H), fps=30.0, fail_exposure=False
+    ):
         self._opened = opened
         self._frames = list(frames) if frames else []
         self._fail_reads = fail_reads
         self._size = size
         self._fps = fps
+        self._fail_exposure = fail_exposure
         self.sets: list[tuple[int, float]] = []
         self.gets: list[int] = []
         self.read_calls = 0
@@ -41,6 +44,8 @@ class FakeCapture:
         return self._opened
 
     def set(self, prop, value) -> bool:
+        if self._fail_exposure and prop == FakeCV2.CAP_PROP_AUTO_EXPOSURE:
+            raise RuntimeError("driver rejects CAP_PROP_AUTO_EXPOSURE")
         self.sets.append((prop, value))
         return True
 
@@ -392,3 +397,52 @@ def test_set_camera_intrinsics_without_undistortion_keeps_maps_empty(env):
     stage.set_camera_intrinsics(estimate_camera_matrix(640, 480), np.zeros(5))
 
     assert stage._map1 is None and stage._map2 is None
+
+
+# ── Failure paths ─────────────────────────────────────────────────────────────
+
+
+def test_auto_exposure_failure_is_non_fatal(env, monkeypatch, caplog):
+    """A driver that rejects the property must not stop the camera opening."""
+    import logging
+
+    stage, fake_cv2, _, _ = env(capture_kwargs={"fail_exposure": True})
+
+    with caplog.at_level(logging.DEBUG, logger="gaze_estimation.camera_thread"):
+        stage._open_camera()
+
+    assert stage._cap is not None
+    assert stage._cap.isOpened() is True
+
+
+def test_map_build_failure_leaves_undistortion_disabled(env, monkeypatch, caplog):
+    import logging
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("bad intrinsics")
+
+    monkeypatch.setattr(camera_module, "precompute_undistort_maps", _boom)
+    stage, _, _, _ = env(undistort=True)
+
+    with caplog.at_level(logging.WARNING, logger="gaze_estimation.camera_thread"):
+        stage._open_camera()
+
+    assert stage._map1 is None and stage._map2 is None
+    assert stage._cap is not None  # the stream still works
+    assert "Could not build undistortion maps" in caplog.text
+
+
+def test_apply_undistort_without_maps_passes_the_frame_through(env):
+    stage, _, _, _ = env(undistort=True)
+    stage._map1 = stage._map2 = None
+
+    assert stage._apply_undistort(FRAME) is FRAME
+
+
+def test_apply_undistort_with_maps_remaps_the_frame(env):
+    stage, _, _, _ = env(undistort=True)
+    stage._open_camera()
+
+    out = stage._apply_undistort(FRAME.copy())
+
+    assert out.shape == FRAME.shape
