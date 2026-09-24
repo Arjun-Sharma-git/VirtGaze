@@ -374,3 +374,47 @@ def test_report_survives_an_unrunnable_interpreter():
     assert ok is False
     assert "FileNotFoundError" in text
     assert "Could not inspect the environment" in text
+
+
+# ── The generated check snippet ───────────────────────────────────────────────
+
+
+def test_snippet_is_valid_python():
+    """The snippet is a string, so nothing else would catch a syntax error."""
+    compile(bs.build_check_snippet(), "<check-snippet>", "exec")
+
+
+def test_snippet_imports_every_declared_package():
+    snippet = bs.build_check_snippet()
+
+    for name in (*bs.REQUIRED_PACKAGES, *bs.OPTIONAL_PACKAGES):
+        assert f"'{name}'" in snippet
+
+
+def test_snippet_is_generated_from_the_required_list():
+    """Drift guard: the snippet and format_report must agree on what is required."""
+    snippet = bs.build_check_snippet()
+
+    assert repr(list(bs.REQUIRED_PACKAGES)) in snippet
+    assert repr(list(bs.OPTIONAL_PACKAGES)) in snippet
+    assert "__REQUIRED__" not in snippet and "__OPTIONAL__" not in snippet
+
+
+def test_snippet_executes_and_reports_the_interpreter():
+    """Run it for real against the current interpreter."""
+    import subprocess
+    import sys
+
+    completed = subprocess.run(
+        [sys.executable, "-c", bs.build_check_snippet()],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert completed.returncode == 0
+    assert "<<<BOOTSTRAP_JSON>>>" in completed.stdout
+
+
+def test_snippet_accepts_the_camera_probe_flag():
+    assert "--probe-camera" in bs.build_check_snippet()

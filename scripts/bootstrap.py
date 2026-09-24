@@ -354,15 +354,31 @@ def format_plan(steps: Sequence[Step], python_exe: str) -> str:
     return "\n".join(lines)
 
 
+# The packages without which the pipeline cannot run, and the optional ones that
+# only degrade a feature.  Declared once: the check snippet below is generated
+# from these, so it cannot drift from what format_report treats as required.
+REQUIRED_PACKAGES: Tuple[str, ...] = (
+    "cv2",
+    "numpy",
+    "scipy",
+    "yaml",
+    "pydantic",
+    "mediapipe",
+    "torch",
+    "onnxruntime",
+)
+OPTIONAL_PACKAGES: Tuple[str, ...] = ("screeninfo", "pygame", "onnx", "tensorrt")
+
+
 # ── Health check ──────────────────────────────────────────────────────────────
 
 # Run inside the target interpreter.  Emitting JSON keeps the parsing trivial and
 # avoids depending on the wording of any library's output.
-CHECK_SNIPPET = r"""
+_CHECK_TEMPLATE = r"""
 import json, sys
 
-REQUIRED = ["cv2", "numpy", "scipy", "yaml", "pydantic", "mediapipe", "torch", "onnxruntime"]
-OPTIONAL = ["screeninfo", "pygame", "onnx", "tensorrt"]
+REQUIRED = __REQUIRED__
+OPTIONAL = __OPTIONAL__
 
 report = {"python": sys.version.split()[0], "packages": {}, "errors": {}, "extra": {}}
 ALIASES = {"yaml": "PyYAML"}
@@ -422,13 +438,26 @@ print("<<<BOOTSTRAP_JSON>>>" + json.dumps(report))
 """
 
 
+def build_check_snippet() -> str:
+    """The verification snippet, with the package lists interpolated.
+
+    Generated from :data:`REQUIRED_PACKAGES` / :data:`OPTIONAL_PACKAGES` so the
+    names the snippet imports cannot drift from the ones
+    :func:`format_report` classifies as required — a mismatch would let the check
+    report "everything is importable" while a required package was missing.
+    """
+    return _CHECK_TEMPLATE.replace("__REQUIRED__", repr(list(REQUIRED_PACKAGES))).replace(
+        "__OPTIONAL__", repr(list(OPTIONAL_PACKAGES))
+    )
+
+
 def run_checks(python_exe: str, probe_camera: bool = False) -> Dict:
-    """Run :data:`CHECK_SNIPPET` in *python_exe* and return the parsed report.
+    """Run :func:`build_check_snippet` in *python_exe* and return the parsed report.
 
     Returns a dict with an ``errors`` entry when the interpreter cannot be run at
     all, so callers never have to handle an exception.
     """
-    command = [python_exe, "-c", CHECK_SNIPPET]
+    command = [python_exe, "-c", build_check_snippet()]
     if probe_camera:
         command.append("--probe-camera")
     try:
