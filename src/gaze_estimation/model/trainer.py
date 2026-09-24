@@ -163,10 +163,19 @@ class MLPTrainer:
         X_val = torch.from_numpy(X_norm[val_idx])
         Y_val = torch.from_numpy(Y_norm[val_idx])
 
+        # BatchNorm1d refuses to train on a batch of one, and the 90 % split can
+        # leave a one-sample tail batch: 55 samples → 49 for training, which a
+        # batch size of 16 cuts as 16 + 16 + 16 + 1.  Dropping that tail removes
+        # the problem at the cost of one sample per epoch.  Without this the run
+        # raises "Expected more than 1 value per channel", which OnlineTrainer
+        # catches and logs — so click adaptation would fail silently for those
+        # sample counts (e.g. the 16-sample fine-tune batch: 19, 37, 55, 73 …).
+        n_train = len(X_tr)
         train_loader = DataLoader(
             TensorDataset(X_tr, Y_tr),
             batch_size=self.batch_size,
             shuffle=True,
+            drop_last=n_train > 1 and n_train % self.batch_size == 1,
         )
 
         # get_torch_device handles "ROCM", "CUDA", "CPU", "auto" uniformly

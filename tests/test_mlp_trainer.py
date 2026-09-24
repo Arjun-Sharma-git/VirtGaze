@@ -6,6 +6,7 @@ import os
 import tempfile
 
 import numpy as np
+import pytest
 
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.model.trainer import MLPTrainer
@@ -31,6 +32,42 @@ def test_trainer_train_returns_model():
     X, Y = _make_data()
     trainer = MLPTrainer(epochs=10, batch_size=64, hidden_dims=[32])
     model = trainer.train(X, Y, screen_width=1920, screen_height=1080)
+    assert isinstance(model, GazeMLP)
+
+
+# ── One-sample tail batches ───────────────────────────────────────────────────
+
+# Sample counts whose 90 % training split leaves a remainder of exactly 1 for at
+# least one of the batch sizes below, e.g. 55 → 49 train → 16+16+16+1.
+_TAIL_BATCH_COUNTS = [10, 11, 19, 28, 37, 46, 55, 64, 73, 82, 90, 91, 108]
+
+
+@pytest.mark.parametrize("batch_size", [8, 16, 32])
+@pytest.mark.parametrize("n", _TAIL_BATCH_COUNTS)
+def test_training_survives_a_one_sample_tail_batch(n, batch_size):
+    """BatchNorm1d cannot train on a batch of one.
+
+    A 90 % split can strand exactly one sample in the last batch, which used to
+    raise ``ValueError: Expected more than 1 value per channel``.  OnlineTrainer
+    catches that and logs it, so click adaptation silently never ran for these
+    counts — hence the explicit regression list.
+    """
+    X, Y = _make_data(n)
+    trainer = MLPTrainer(epochs=1, batch_size=batch_size, hidden_dims=[8, 8], device="cpu")
+
+    model = trainer.train(X, Y, screen_width=1920, screen_height=1080)
+
+    assert isinstance(model, GazeMLP)
+    assert model.predict_numpy(trainer.normalise(X[:1])).shape == (1, 2)
+
+
+def test_training_still_uses_every_sample_when_no_tail_exists():
+    """The tail is only dropped in the pathological case."""
+    X, Y = _make_data(90)  # 81 train samples, 81 % 32 = 17
+    trainer = MLPTrainer(epochs=1, batch_size=32, hidden_dims=[8, 8], device="cpu")
+
+    model = trainer.train(X, Y)
+
     assert isinstance(model, GazeMLP)
 
 
