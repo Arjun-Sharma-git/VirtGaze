@@ -177,7 +177,7 @@ class CalibrationEngine:
         )
 
         # Train MLP + build the residual bias map
-        mlp_path = mlp_save_path
+        mlp_path = None
         bias_map = None
         if all_samples:
             from gaze_estimation.pipeline.schemas import FEATURE_KEYS
@@ -191,8 +191,11 @@ class CalibrationEngine:
             _logger.info("Training MLP on %d samples …", len(X))
             model = self._trainer.train(X, Y, self.screen_width, self.screen_height)
 
-            if mlp_path:
-                self._trainer.save(model, mlp_path)
+            if mlp_save_path:
+                self._trainer.save(model, mlp_save_path)
+                # Only report the path once the file actually exists, otherwise
+                # callers would try to load a model that was never written.
+                mlp_path = mlp_save_path
                 _logger.info("MLP saved to %s", mlp_path)
 
             bias_map = self._build_bias_map(model, X, Y)
