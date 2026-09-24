@@ -1,6 +1,33 @@
-.PHONY: install install-dev lint format typecheck check test test-cov clean run-tracker run-calibration export-model precommit precommit-install
+.PHONY: setup setup-dev setup-cpu setup-headless setup-rocm doctor doctor-camera install install-dev lint format typecheck check test test-cov clean run-tracker run-calibration export-model precommit precommit-install
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
+# Prefer `make setup`: it creates .venv, picks the right OpenCV/PyTorch, installs
+# the package and verifies the result.  The bare `install-*` targets below assume
+# you already have the virtualenv you want to use activated.
+
+setup:
+	python scripts/bootstrap.py
+
+setup-dev:
+	python scripts/bootstrap.py --dev
+
+setup-cpu:
+	python scripts/bootstrap.py --torch cpu
+
+setup-headless:
+	python scripts/bootstrap.py --opencv headless
+
+# AMD GPU (ROCm) — PyTorch ROCm wheel + onnxruntime-rocm
+setup-rocm:
+	python scripts/bootstrap.py --torch rocm
+
+# Report versions, device, screen and camera without changing anything
+doctor:
+	python scripts/bootstrap.py --check
+
+doctor-camera:
+	python scripts/bootstrap.py --check --probe-camera
+
 install:
 	pip install -e .
 

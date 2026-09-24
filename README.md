@@ -28,23 +28,119 @@ All pipeline stages run on separate threads with bounded queues for natural back
 ## Quick Start
 
 ```bash
-# 1. Install
-pip install -e .
-# or for development:
-pip install -e ".[dev]"
+# 1. Install (creates .venv, picks the right OpenCV/PyTorch, then verifies it)
+python scripts/bootstrap.py
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
-# 2. Run the tracker (first run will prompt for calibration)
+# 2. Confirm the environment is ready (versions, device, screen, camera)
+python scripts/bootstrap.py --check
+
+# 3. Run the tracker (first run will prompt for calibration)
 python scripts/run_tracker.py --user alice
 
-# 3. Run calibration standalone
+# 4. Run calibration standalone
 python scripts/run_calibration.py --user alice
 
-# 4. Quick 5-point recalibration
+# 5. Quick 5-point recalibration
 python scripts/run_calibration.py --user alice --quick
 
-# 5. Run with click-based online adaptation
+# 6. Run with click-based online adaptation
 python scripts/run_tracker.py --user alice --implicit-calibration
 ```
+
+`make setup` is equivalent to step 1, `make doctor` to step 2.
+
+---
+
+## Installation
+
+One command sets up a working environment on Linux, macOS, or Windows:
+
+```bash
+python scripts/bootstrap.py
+```
+
+It exists because a bare `pip install -e .` fails on a fresh machine in four
+common and confusing ways, and it handles each of them:
+
+| Situation | What `pip install -e .` does | What the bootstrap does |
+|---|---|---|
+| Debian/Ubuntu 24.04+ | Refuses: *externally managed environment* (PEP 668) | Creates a virtualenv, so PEP 668 never applies |
+| Python 3.13+ | Fails on a dependency with no wheel | Asks PyPI which wheels exist, names the blocking package, and points at 3.10–3.12 |
+| Headless server | Installs, then `import cv2` dies on `libGL.so.1` | Detects the missing display and installs `opencv-python-headless` |
+| NVIDIA machine | Silently installs CPU-only PyTorch | Uses the CUDA-enabled wheel by default; `--torch cpu/rocm` to override |
+
+Then it verifies the result rather than assuming:
+
+```
+Environment check
+=================
+
+  Python        : 3.12.4
+  PyTorch device: CUDA (12.4) — GPU: NVIDIA GeForce RTX 4070 (1 device(s))
+  Screen        : 2560x1440
+  OpenCV build  : opencv-python 4.10.0.84
+
+  Packages
+    cv2          4.10.0
+    mediapipe    0.10.14
+    torch        2.4.1+cu124
+    ...
+
+  Everything needed is importable.
+```
+
+### Options
+
+| Flag | Purpose |
+|---|---|
+| `--dev` | Also install the test/lint tooling (`pytest`, `ruff`, `mypy`, `pre-commit`) |
+| `--torch cpu` / `rocm` / `none` | Choose the PyTorch build, or leave an existing one alone |
+| `--opencv display` / `headless` | Override the automatic display detection |
+| `--venv PATH` | Put the virtualenv somewhere else (default `.venv`) |
+| `--python PATH` | Build with a specific interpreter, e.g. `--python python3.12` |
+| `--check` | Verify an existing environment and change nothing |
+| `--probe-camera` | Also try to open camera index 0 |
+| `--dry-run` | Print the exact commands without running them |
+| `--no-deps` | Install the package without re-resolving dependencies (used by the ROCm path) |
+
+Common combinations:
+
+```bash
+python scripts/bootstrap.py --dev                    # development setup
+python scripts/bootstrap.py --torch cpu              # CPU-only PyTorch
+python scripts/bootstrap.py --opencv headless        # server, no display
+python scripts/bootstrap.py --torch rocm             # AMD GPU
+python scripts/bootstrap.py --dry-run                # see the plan first
+```
+
+Exit codes: `0` success, `1` the environment check found missing required
+packages, `2` unsupported interpreter or a failed install. Re-running is safe —
+an existing virtualenv is reused, and a failed run can simply be repeated.
+
+### Manual installation
+
+If you would rather not use the script, the equivalent steps are:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install opencv-python-headless        # or opencv-python when you have a display
+pip install torch                          # add --index-url https://download.pytorch.org/whl/cpu for CPU-only
+pip install -e .
+python scripts/bootstrap.py --check        # verify
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `error: externally-managed-environment` | Use a virtualenv — `python scripts/bootstrap.py` does it for you |
+| `No matching distribution found for pygame` (or mediapipe) | That Python is too new. `--python python3.12`; on Ubuntu `sudo apt install python3.12 python3.12-venv` |
+| `ImportError: libGL.so.1` | Install `opencv-python-headless` instead of `opencv-python` (or `apt install libgl1`) |
+| `ensurepip is not available` | `sudo apt install python3-venv`, or let the script fall back to `get-pip.py` |
+| PyTorch reports CPU on a CUDA machine | Reinstall with the CUDA index, or check `nvidia-smi` / the driver |
 
 ---
 
@@ -275,7 +371,8 @@ CI (`.github/workflows/ci.yml`) runs on every push and pull request:
 | `typecheck` | `mypy src/gaze_estimation` on Python 3.12 |
 | `test` | `pytest tests/` on Python 3.10, 3.11 and 3.12 |
 
-Python 3.9 is **not** supported: it is end-of-life and mypy 2.x cannot target it.
+Python 3.9 is **not** supported: `pyproject.toml` requires `>=3.10`, which the
+bootstrap script reads directly rather than duplicating.
 
 ---
 
@@ -305,12 +402,16 @@ python scripts/export_model.py --user alice --format tensorrt --output models/ga
 
 ## Dependencies
 
-- Python 3.9 – 3.12 (MediaPipe publishes no wheels for 3.13+)
-- OpenCV ≥ 4.8
+- Python 3.10 – 3.12 (the tested range; check with `python scripts/bootstrap.py --check`)
+- OpenCV ≥ 4.8 — `opencv-python` for a display, `opencv-python-headless` on a server
 - MediaPipe ≥ 0.10
-- PyTorch ≥ 2.0
+- PyTorch ≥ 2.0 (the PyPI wheel is CUDA-enabled on Linux/Windows; use the CPU index for CPU-only)
 - ONNX Runtime ≥ 1.15
 - PyYAML, Pydantic ≥ 2.0, SciPy, Pygame, screeninfo
+
+Newer interpreters may work: `scripts/bootstrap.py` asks PyPI whether every
+required package still publishes a wheel for the interpreter and reports exactly
+which ones block the install (pygame is usually the first to lag).
 
 OpenCV 5 is supported, with one caveat: it removed `cv2.CascadeClassifier` and
 the bundled cascade XML files, so the Haar detection fallback — used only when
@@ -340,15 +441,17 @@ The system fully supports AMD GPUs via the ROCm / HIP backend:
 # 1. Install ROCm system packages (follow AMD docs for your distro + ROCm version)
 #    https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html
 
-# 2. Install PyTorch with ROCm wheel + onnxruntime-rocm
+# 2. One command: creates .venv, installs the ROCm PyTorch wheel,
+#    onnxruntime-rocm and the package, then verifies the result
+python scripts/bootstrap.py --torch rocm
+
+# Manual equivalent:
 pip install -r requirements-rocm.txt
-
-# 3. Install the package itself (no-deps, wheels already installed above)
 pip install -e . --no-deps
-
-# Or use the Makefile shortcut:
-make install-rocm
 ```
+
+`--torch rocm` uses the `rocm6.2` wheel index by default; pass
+`--rocm-version 6.4` (or whichever series matches your system ROCm) to change it.
 
 ### Configure for ROCm
 
