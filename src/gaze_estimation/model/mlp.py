@@ -63,9 +63,12 @@ class GazeMLP(nn.Module):
     def predict_numpy(self, features_np) -> np.ndarray:
         """Convenience predict for a (1, 34) numpy array.  Returns (1, 2) numpy."""
         self.eval()
+        # Run on whatever device the weights live on (CPU, or the GPU via
+        # CUDA/ROCm), and always hand back a host-side numpy array.
+        device = next(self.parameters()).device
         with torch.no_grad():
-            x = torch.from_numpy(features_np.astype("float32"))
+            x = torch.from_numpy(features_np.astype("float32")).to(device)
             if x.dim() == 1:
                 x = x.unsqueeze(0)
             out = self.forward(x)
-        return out.numpy()
+        return out.cpu().numpy()

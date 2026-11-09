@@ -90,7 +90,7 @@ def main() -> None:
             from gaze_estimation.model.trainer import MLPTrainer
 
             trainer = MLPTrainer()
-            model, trainer = trainer.load(result.mlp_weights_path)
+            model, trainer = trainer.load(result.mlp_weights_path, config=config)
             pipeline.set_model(model, trainer)
         if result.bias_map is not None:
             pipeline.set_bias_map(result.bias_map)

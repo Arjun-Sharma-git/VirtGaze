@@ -101,7 +101,7 @@ def main() -> None:
         weights_path = profile.mlp_weights_path
         try:
             trainer = MLPTrainer()
-            model, trainer = trainer.load(weights_path)
+            model, trainer = trainer.load(weights_path, config=config)
             print(f"[tracker] Loaded calibration profile for user '{args.user}'")
         except Exception as exc:
             model = trainer = None

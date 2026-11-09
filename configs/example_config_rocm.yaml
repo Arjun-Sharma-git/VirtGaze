@@ -1,6 +1,7 @@
 # Example configuration for AMD GPU (ROCm) users.
-# Install with:  make install-rocm
+# Install with:  make install-rocm  (only the PyTorch ROCm wheel is needed)
 # Run with:      python scripts/run_tracker.py --config configs/example_config_rocm.yaml
+#                python scripts/run_calibration.py --config configs/example_config_rocm.yaml
 
 camera:
   index: 0
@@ -9,9 +10,10 @@ camera:
   fps: 60
 
 inference:
-  backend: "onnx"
-  device: "ROCM"     # Use ROCMExecutionProvider (requires onnxruntime-rocm).
-                     # Also selects the PyTorch training device (MLPTrainer.from_config).
+  backend: "torch"   # In-process PyTorch on the GPU via HIP.  "onnx" needs onnxruntime-rocm,
+                     # whose wheels target ROCm 6.x, not the ROCm 7 PyTorch stack.
+  device: "ROCM"     # PyTorch device for inference and training (MLPTrainer.from_config);
+                     # with backend "onnx" it selects ROCMExecutionProvider.
   fallback_to_geometric: true
   confidence_threshold: 0.7
 

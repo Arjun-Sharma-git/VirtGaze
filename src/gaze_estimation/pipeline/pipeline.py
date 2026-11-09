@@ -133,10 +133,31 @@ class InferenceStage(StageThread):
                        ``ONNXInference`` or ``TensorRTInference`` instance.
             backend:   Backend name, reported in ``GazeEstimate.source``.
         """
+        if predictor is None and model is not None:
+            model = self._place_on_inference_device(model)
         self._model = model
         self._trainer = trainer
         self._predictor = predictor
         self._source_name = "mlp" if backend == "torch" else str(backend)
+
+    def _place_on_inference_device(self, model):
+        """Move an in-process torch model to ``inference.device`` (CUDA/ROCm/auto).
+
+        CPU (the default) leaves the model untouched, so torch is only imported
+        when a GPU was asked for.  Any failure keeps the model where it is.
+        """
+        requested = str(self._config.get("inference.device", "CPU")).upper()
+        if requested == "CPU" or not hasattr(model, "to"):
+            return model
+        try:
+            from gaze_estimation.utils.device import get_torch_device
+
+            device = get_torch_device(requested)
+            model = model.to(device)
+            self._logger.info("Torch inference on %s (%s)", device, describe_device())
+        except Exception as exc:
+            self._logger.warning("Could not move model to %s (%s); staying on CPU", requested, exc)
+        return model
 
     def set_bias_map(self, bias_map) -> None:
         """Attach a :class:`~gaze_estimation.correction.bias_map.BiasMap`.
