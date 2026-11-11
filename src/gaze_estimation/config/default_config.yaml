@@ -30,6 +30,7 @@ gaze:
 calibration:
   grid_cols: 5
   grid_rows: 5
+  edge_margin: 0.03        # outer dots this far (fraction of the screen) from the edges
   samples_per_target: 120
   target_duration_sec: 2.0
   pulse_animation: true

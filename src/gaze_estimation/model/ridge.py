@@ -44,6 +44,8 @@ class RidgeGazeModel:
         # set by the quick recalibration when the head has moved since the
         # full calibration.
         self.offset = np.zeros(2, dtype=np.float64)
+        self._gain = np.ones(2)
+        self._bias = np.zeros(2)
 
     @property
     def is_trained(self) -> bool:
@@ -103,6 +105,17 @@ class RidgeGazeModel:
         A = Xs.T @ Xs + self.alpha * np.eye(Xs.shape[1])
         self._coef = np.linalg.solve(A, Xs.T @ (Y - y_mean))
         self._intercept = y_mean
+        # The strong penalty shrinks predictions towards the screen centre, so
+        # the edges become unreachable.  Undo that with a per-axis linear
+        # stretch fitted on the training data (prediction -> target).
+        pred = Xs @ self._coef + self._intercept
+        self._gain = np.ones(2)
+        self._bias = np.zeros(2)
+        for axis in range(2):
+            p = pred[:, axis]
+            if np.var(p) > 1e-12:
+                gain, bias = np.polyfit(p, Y[:, axis], 1)
+                self._gain[axis], self._bias[axis] = gain, bias
 
     # ── Inference ──────────────────────────────────────────────────────────
 
@@ -111,7 +124,8 @@ class RidgeGazeModel:
         if self._coef is None or self._mean is None or self._std is None:
             raise RuntimeError("ridge model is not trained")
         X = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        return ((X - self._mean) / self._std) @ self._coef + self._intercept + self.offset
+        raw = ((X - self._mean) / self._std) @ self._coef + self._intercept
+        return raw * self._gain + self._bias + self.offset
 
     def correct_drift(self, X: np.ndarray, Y_px: np.ndarray) -> np.ndarray:
         """Set :attr:`offset` so predictions on ``X`` centre on ``Y_px``.

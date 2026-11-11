@@ -50,9 +50,9 @@ class _Aborted(Exception):
 
 
 def _grid(points: int, sw: int, sh: int) -> list:
-    """Test positions between the 5x5 calibration grid lines (10%..90%)."""
-    n = 3 if points == 9 else 4
-    fr = np.linspace(0.15, 0.85, n)
+    """Test positions (shuffled)."""
+    # 9 points: inner area; 16 points: reaches out to 6% from the edges
+    n, fr = (3, np.linspace(0.15, 0.85, 3)) if points == 9 else (4, np.linspace(0.06, 0.94, 4))
     pts = [(float(x * sw), float(y * sh)) for y in fr for x in fr]
     np.random.default_rng().shuffle(pts)
     return pts

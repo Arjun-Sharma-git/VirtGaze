@@ -210,6 +210,7 @@ def main() -> None:
             bias_map_smoothing=bias_smoothing,
         )
         engine.ridge_alpha = float(config.get("inference.ridge_alpha", 100.0))
+        engine.edge_margin = float(cal_cfg.get("edge_margin", 0.03))
         ui = _make_ui()
         ui.start()
 

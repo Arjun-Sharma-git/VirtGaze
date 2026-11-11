@@ -60,7 +60,10 @@ def build_residual_bias_map(
 
 
 # Default screen margins as fraction of screen dimensions
-_MARGIN = 0.1  # 10% margin on each side → targets from 10% to 90%
+# Targets span the screen up to this margin (fraction of each side).  Keep
+# it small: the gaze model does not extrapolate well, so the outer row and
+# column of dots set how far towards the edges the tracker can reach.
+_MARGIN = 0.03
 
 
 class CalibrationEngine:
@@ -104,6 +107,7 @@ class CalibrationEngine:
         self.samples_per_target = samples_per_target
         self.target_duration_sec = target_duration_sec
         self.outlier_sigma = outlier_sigma
+        self.edge_margin = _MARGIN  # set from calibration.edge_margin
         self.ridge_alpha = 100.0  # see RidgeGazeModel; set from inference.ridge_alpha
         self._trainer = mlp_trainer or MLPTrainer()
         self._camera_matrix = camera_matrix
@@ -116,8 +120,9 @@ class CalibrationEngine:
 
     def generate_targets(self) -> List[Tuple[float, float]]:
         """Generate calibration target positions (randomised order)."""
-        xs = np.linspace(_MARGIN, 1.0 - _MARGIN, self.grid_cols) * self.screen_width
-        ys = np.linspace(_MARGIN, 1.0 - _MARGIN, self.grid_rows) * self.screen_height
+        m = self.edge_margin
+        xs = np.linspace(m, 1.0 - m, self.grid_cols) * self.screen_width
+        ys = np.linspace(m, 1.0 - m, self.grid_rows) * self.screen_height
         targets = [(float(x), float(y)) for y in ys for x in xs]
         random.shuffle(targets)
         return targets
