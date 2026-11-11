@@ -4,6 +4,7 @@ camera:
   height: 720
   fps: 60
   auto_exposure: true
+  fourcc: ""                # pixel format to request, e.g. "MJPG"; "" = driver default
   undistort: false          # Apply lens-distortion correction (needs intrinsics)
   intrinsics_path: ""       # Optional .npz from scripts/calibrate_camera.py
 
@@ -31,6 +32,10 @@ calibration:
   grid_cols: 5
   grid_rows: 5
   edge_margin: 0.03        # outer dots this far (fraction of the screen) from the edges
+  settle_sec: 0.3          # per dot: show it this long before sampling (eyes settle)
+  order: "random"          # "random" | "serpentine" (row by row, alternating direction)
+  blink_ear_ratio: 0.8     # skip samples whose EAR is below this fraction of recent (0 = off)
+  wait_for_face_sec: 2.0   # start once the face is tracked steadily this long (0 = don't wait)
   samples_per_target: 120
   target_duration_sec: 2.0
   pulse_animation: true

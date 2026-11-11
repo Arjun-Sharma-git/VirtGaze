@@ -6,7 +6,6 @@ import math
 import queue
 import threading
 import time
-from collections import deque
 from typing import Optional, Protocol
 
 import numpy as np
@@ -16,6 +15,7 @@ from gaze_estimation.config.config import Config
 from gaze_estimation.detection.face_detector import FaceDetector
 from gaze_estimation.filtering.fixation_detector import FixationDetector
 from gaze_estimation.filtering.one_euro import OneEuroFilter2D
+from gaze_estimation.filtering.blink import BlinkDetector
 from gaze_estimation.filtering.unscented_kalman import UnscentedKalmanFilter
 from gaze_estimation.gaze.gaze_geometry import GazeGeometryEstimator
 from gaze_estimation.mesh.face_mesh import FaceMeshExtractor
@@ -313,31 +313,18 @@ class FilterStage(StageThread):
         # below this person's recent open-eye level; during it (and a couple of
         # frames after) the filters are not updated and the last point is kept.
         filt_cfg = config.section("filtering")
-        self._blink_ratio = float(filt_cfg.get("blink_ear_ratio", 0.75))
+        self._blink = BlinkDetector(ratio=float(filt_cfg.get("blink_ear_ratio", 0.75)))
         self._blink_after = int(filt_cfg.get("blink_hold_frames", 3))
-        self._ear_history: deque = deque(maxlen=60)
         self._hold_left = 0
         self._last_out: Optional[tuple] = None
-
-    def _is_blink(self, ear: float) -> bool:
-        """Relative blink test, updated with every open-eye sample."""
-        if self._blink_ratio <= 0.0 or ear <= 0.0:
-            return False
-        if len(self._ear_history) >= 15:
-            if ear < self._blink_ratio * float(np.median(self._ear_history)):
-                return True
-        self._ear_history.append(ear)
-        return False
 
     def process(self, item: object) -> None:
         if not isinstance(item, PredictionPacket):
             return
 
-        ear = (
-            float(item.raw_features.get("left_ear", 0.0))
-            + float(item.raw_features.get("right_ear", 0.0))
-        ) / 2.0
-        if self._is_blink(ear):
+        if self._blink.is_blink(
+            item.raw_features.get("left_ear", 0.0), item.raw_features.get("right_ear", 0.0)
+        ):
             self._hold_left = self._blink_after
             held = True
         elif self._hold_left > 0:
@@ -545,6 +532,7 @@ class GazeEstimationPipeline:
                 dist_coeffs=self._dist_coeffs,
                 undistort=bool(c.get("undistort", False)),
                 auto_exposure=bool(c.get("auto_exposure", True)),
+                fourcc=str(c.get("fourcc", "") or ""),
             )
             self._source = cam_thread
 

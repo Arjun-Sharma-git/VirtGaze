@@ -10,6 +10,7 @@ from typing import Callable, List, Optional, Tuple
 import numpy as np
 
 from gaze_estimation.correction.bias_map import BiasMap
+from gaze_estimation.filtering.blink import BlinkDetector
 from gaze_estimation.gaze.kappa_compensation import estimate_kappa, fit_eyeball_radius
 from gaze_estimation.model.trainer import MLPTrainer
 from gaze_estimation.pipeline.schemas import (
@@ -108,6 +109,13 @@ class CalibrationEngine:
         self.target_duration_sec = target_duration_sec
         self.outlier_sigma = outlier_sigma
         self.edge_margin = _MARGIN  # set from calibration.edge_margin
+        # EyeTrax-style sampling: show each dot for settle_sec before sampling,
+        # skip blink frames, optionally visit dots row by row.
+        self.settle_sec = 0.3
+        self.order = "random"
+        self.blink_ear_ratio = 0.8
+        self.wait_for_face_sec = 0.0  # set from calibration.wait_for_face_sec
+        self._blink = BlinkDetector(ratio=self.blink_ear_ratio)
         self.ridge_alpha = 100.0  # see RidgeGazeModel; set from inference.ridge_alpha
         self._trainer = mlp_trainer or MLPTrainer()
         self._camera_matrix = camera_matrix
@@ -123,6 +131,12 @@ class CalibrationEngine:
         m = self.edge_margin
         xs = np.linspace(m, 1.0 - m, self.grid_cols) * self.screen_width
         ys = np.linspace(m, 1.0 - m, self.grid_rows) * self.screen_height
+        if self.order == "serpentine":
+            return [
+                (float(x), float(y))
+                for r, y in enumerate(ys)
+                for x in (xs if r % 2 == 0 else xs[::-1])
+            ]
         targets = [(float(x), float(y)) for y in ys for x in xs]
         random.shuffle(targets)
         return targets
@@ -148,6 +162,12 @@ class CalibrationEngine:
         """
         targets = self.generate_targets()
         all_samples: List[CalibrationSample] = []
+        ridge_samples: List[CalibrationSample] = []
+        self._blink = BlinkDetector(ratio=self.blink_ear_ratio)
+        if self.wait_for_face_sec > 0:
+            if on_target_change and targets:
+                on_target_change(*targets[0])  # something to look at while waiting
+            self._wait_for_face(gaze_queue)
 
         n_targets = len(targets)
         for i, (tx, ty) in enumerate(targets):
@@ -158,11 +178,16 @@ class CalibrationEngine:
             # Drain stale packets
             _drain(gaze_queue)
 
-            # Wait briefly for eyes to fixate on new target
-            time.sleep(0.3)
+            # Show the dot before sampling so the eyes have settled on it
+            time.sleep(self.settle_sec)
+            _drain(gaze_queue)
 
-            # Collect samples
-            samples = self._collect_samples(gaze_queue, tx, ty)
+            # Collect samples (blink frames skipped).  The ridge model gets all
+            # of them; the MLP gets them after angle-based outlier removal,
+            # which relies on the geometric gaze angles the ridge model avoids.
+            raw = self._collect_samples(gaze_queue, tx, ty)
+            ridge_samples.extend(raw)
+            samples = self._remove_outliers(raw)
             all_samples.extend(samples)
             # Few samples on one side of the screen skew the model there.
             _logger.info("Target %d/%d  kept %d samples", i + 1, n_targets, len(samples))
@@ -209,7 +234,7 @@ class CalibrationEngine:
 
             bias_map = self._build_bias_map(model, X, Y)
 
-        ridge_path = self._train_ridge(all_samples, ridge_save_path)
+        ridge_path = self._train_ridge(ridge_samples, ridge_save_path)
 
         return CalibrationResult(
             samples=all_samples,
@@ -287,6 +312,10 @@ class CalibrationEngine:
             # The tap carries GazePackets; ignore anything else defensively.
             if not hasattr(packet, "features") or packet.confidence < 0.3:
                 continue
+            if self._blink.is_blink(
+                packet.features.get("left_ear", 0.0), packet.features.get("right_ear", 0.0)
+            ):
+                continue
 
             collected.append(
                 CalibrationSample(
@@ -302,7 +331,31 @@ class CalibrationEngine:
                 )
             )
 
-        return self._remove_outliers(collected)
+        return collected
+
+    def _wait_for_face(self, gaze_queue: queue.Queue) -> None:
+        """Wait until the face is tracked steadily for wait_for_face_sec (max 30 s)."""
+        if self.wait_for_face_sec <= 0:
+            return
+        _drain(gaze_queue)
+        give_up = time.monotonic() + 30.0
+        since: Optional[float] = None
+        while time.monotonic() < give_up:
+            try:
+                packet = gaze_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            ok = getattr(packet, "confidence", 0.0) >= 0.3 and (
+                getattr(packet, "landmark_features", None) is not None
+            )
+            now = time.monotonic()
+            if not ok:
+                since = None
+            elif since is None:
+                since = now
+            elif now - since >= self.wait_for_face_sec:
+                return
+        _logger.warning("Face not tracked steadily; starting calibration anyway")
 
     def _remove_outliers(self, samples: List[CalibrationSample]) -> List[CalibrationSample]:
         """Reject samples more than *outlier_sigma* σ from mean gaze angles."""

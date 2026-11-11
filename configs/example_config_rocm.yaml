@@ -5,9 +5,12 @@
 
 camera:
   index: 0
-  width: 1280
-  height: 720
-  fps: 60
+  # The camera's default mode (no MJPG compression), as EyeTrax uses: cleaner
+  # iris landmarks than compressed 720p on this webcam.
+  width: 640
+  height: 480
+  fps: 30
+  fourcc: ""
 
 inference:
   backend: "torch"   # In-process PyTorch on the GPU via HIP.  "onnx" needs onnxruntime-rocm,
@@ -16,10 +19,16 @@ inference:
                      # with backend "onnx" it selects ROCMExecutionProvider.
   fallback_to_geometric: true
   confidence_threshold: 0.7
+  ridge_alpha: 1.0   # EyeTrax's default; raise (e.g. 100) if predictions are noisy
 
 calibration:
-  # 2 s per dot yields only ~30 samples on a 15 FPS webcam; give it longer.
-  target_duration_sec: 4.0
+  # EyeTrax-style sampling: wait for the face, visit dots row by row, show
+  # each dot 2 s before sampling for 1 s, and skip blink frames.
+  wait_for_face_sec: 2.0
+  order: "serpentine"
+  settle_sec: 2.0
+  target_duration_sec: 1.0
+  blink_ear_ratio: 0.8
 
 filtering:
   # Keeps the dot still for small eye/landmark noise (0 to turn off).

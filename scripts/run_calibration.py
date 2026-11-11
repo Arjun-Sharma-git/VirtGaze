@@ -211,6 +211,10 @@ def main() -> None:
         )
         engine.ridge_alpha = float(config.get("inference.ridge_alpha", 100.0))
         engine.edge_margin = float(cal_cfg.get("edge_margin", 0.03))
+        engine.settle_sec = float(cal_cfg.get("settle_sec", 0.3))
+        engine.order = str(cal_cfg.get("order", "random"))
+        engine.blink_ear_ratio = float(cal_cfg.get("blink_ear_ratio", 0.8))
+        engine.wait_for_face_sec = float(cal_cfg.get("wait_for_face_sec", 2.0))
         ui = _make_ui()
         ui.start()
 

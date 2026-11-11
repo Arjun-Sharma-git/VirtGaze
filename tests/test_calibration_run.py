@@ -351,3 +351,33 @@ def test_drain_respects_the_cap():
     _drain(q, max_drain=2)
 
     assert q.qsize() == 3
+
+
+def test_serpentine_order_visits_rows_alternately():
+    engine = _engine()
+    engine.order = "serpentine"
+    engine.grid_cols, engine.grid_rows = 3, 2
+
+    targets = engine.generate_targets()
+
+    xs = [round(t[0]) for t in targets]
+    assert xs[:3] == sorted(xs[:3])
+    assert xs[3:] == sorted(xs[3:], reverse=True)
+
+
+def test_blink_frames_are_not_collected(fast_engine_time):
+    import queue as _queue
+
+    from gaze_estimation.pipeline.schemas import GazePacket, empty_features
+
+    engine = _engine(samples_per_target=20, target_duration_sec=1000.0)
+    q: _queue.Queue = _queue.Queue()
+    for i in range(30):
+        feats = empty_features()
+        ear = 0.05 if 15 <= i < 25 else 0.30  # frames 15-24: eyes closed
+        feats["left_ear"] = feats["right_ear"] = ear
+        q.put(GazePacket(float(i), None, None, 0.0, 0.0, feats, None, 1.0))
+
+    samples = engine._collect_samples(q, 10.0, 10.0)
+
+    assert len(samples) == 20

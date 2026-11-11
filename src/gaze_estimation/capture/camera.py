@@ -46,6 +46,7 @@ class CameraCapture(StageThread):
         dist_coeffs: Optional[np.ndarray] = None,
         undistort: bool = False,
         auto_exposure: bool = True,
+        fourcc: str = "",
         name: str = "camera_thread",
     ) -> None:
         super().__init__(
@@ -73,6 +74,9 @@ class CameraCapture(StageThread):
         self._map1: Optional[np.ndarray] = None
         self._map2: Optional[np.ndarray] = None
         self._auto_exposure = auto_exposure
+        # Pixel format to request, e.g. "MJPG" (faster at high resolutions,
+        # but compressed); "" keeps the driver default.
+        self._fourcc = str(fourcc or "").strip()[:4]
 
     # ── StageThread interface ─────────────────────────────────────────────
 
@@ -160,8 +164,8 @@ class CameraCapture(StageThread):
         # default is often capped at 5-10 FPS.  Ignored by drivers without it.
         prop_fourcc = getattr(cv2, "CAP_PROP_FOURCC", None)
         make_fourcc = getattr(cv2, "VideoWriter_fourcc", None)
-        if prop_fourcc is not None and make_fourcc is not None:
-            cap.set(prop_fourcc, make_fourcc(*"MJPG"))
+        if self._fourcc and prop_fourcc is not None and make_fourcc is not None:
+            cap.set(prop_fourcc, make_fourcc(*self._fourcc))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         cap.set(cv2.CAP_PROP_FPS, self._target_fps)
