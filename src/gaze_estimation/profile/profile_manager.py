@@ -185,6 +185,10 @@ class ProfileManager:
         """Return the default ONNX model path for a user."""
         return os.path.join(self._profile_dir(user_id), "mlp_model.onnx")
 
+    def get_profile_filters_path(self, user_id: str) -> str:
+        """Return the tuned filter parameters path (scripts/tune_filters.py)."""
+        return os.path.join(self._profile_dir(user_id), "filters.json")
+
     def get_profile_ridge_path(self, user_id: str) -> str:
         """Return the landmark ridge model path for a user."""
         return os.path.join(self._profile_dir(user_id), "ridge_model.npz")

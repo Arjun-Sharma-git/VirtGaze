@@ -670,6 +670,18 @@ class GazeEstimationPipeline:
         if self._inference_stage is not None:
             self._inference_stage.set_model(model, trainer, predictor=predictor, backend=backend)
 
+    def tap_predictions(self, maxsize: int = 10000) -> queue.Queue:
+        """Return a queue receiving a copy of every raw (unfiltered) prediction.
+
+        Must be called after :meth:`start`.  Used to record sessions for
+        filter tuning.
+        """
+        if self._inference_stage is None:
+            raise RuntimeError("tap_predictions() needs a started pipeline")
+        tap: queue.Queue = queue.Queue(maxsize=maxsize)
+        self._inference_stage.tap_queue = tap
+        return tap
+
     def set_ridge_model(self, ridge) -> None:
         """Attach a landmark ridge model (preferred over the MLP when present).
 

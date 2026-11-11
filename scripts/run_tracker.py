@@ -64,6 +64,11 @@ def main() -> None:
 
     screen_w, screen_h = detect_screen_resolution()
     profile_mgr = ProfileManager(profiles_dir=str(config.get("profile.profiles_dir", "profiles")))
+    # Filter parameters tuned for this user (scripts/tune_filters.py), if any
+    from gaze_estimation.filtering.tuning import apply_filter_params
+
+    if apply_filter_params(config, profile_mgr.get_profile_filters_path(args.user)):
+        print(f"[tracker] Using tuned filter settings for '{args.user}'")
     pipeline = GazeEstimationPipeline(config=config, screen_width=screen_w, screen_height=screen_h)
 
     # ── Camera intrinsics (chessboard file, else the stored profile) ──────
