@@ -32,9 +32,21 @@ def attach_user_model(pipeline, config: Config, profile_mgr: ProfileManager, use
     has no calibration.
     """
     profile = profile_mgr.load_profile(user)
+    ridge_path = profile_mgr.get_profile_ridge_path(user)
+    want_ridge = str(config.get("inference.model", "ridge")).lower() != "mlp"
     if profile is None:
+        # Direct-mode calibration (direct_calibrate.py) saves only the ridge model
+        if want_ridge and os.path.exists(ridge_path):
+            from gaze_estimation.model.ridge import RidgeGazeModel
+
+            pipeline.set_ridge_model(
+                RidgeGazeModel.load(
+                    ridge_path, alpha=float(config.get("inference.ridge_alpha", 100.0))
+                )
+            )
+            return "ridge"
         raise RuntimeError(
-            f"No calibration for '{user}'. Run scripts/run_calibration.py --user {user}"
+            f"No calibration for '{user}'. Run scripts/direct_calibrate.py --user {user}"
         )
     if profile.camera_intrinsics:
         pipeline.set_camera_intrinsics(
@@ -43,8 +55,6 @@ def attach_user_model(pipeline, config: Config, profile_mgr: ProfileManager, use
         )
     pipeline.update_kappa(profile.kappa_yaw, profile.kappa_pitch)
 
-    ridge_path = profile_mgr.get_profile_ridge_path(user)
-    want_ridge = str(config.get("inference.model", "ridge")).lower() != "mlp"
     if want_ridge and os.path.exists(ridge_path):
         from gaze_estimation.model.ridge import RidgeGazeModel
 

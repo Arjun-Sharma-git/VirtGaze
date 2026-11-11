@@ -35,6 +35,9 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Check gaze tracker accuracy")
     p.add_argument("--config", default="configs/example_config.yaml")
     p.add_argument("--user", default="default")
+    p.add_argument(
+        "--direct", action="store_true", help="Use the direct engine (direct_calibrate.py)"
+    )
     p.add_argument("--points", type=int, choices=(9, 16), default=9, help="Still test dots")
     p.add_argument("--hold", type=float, default=3.0, help="Seconds per still dot")
     p.add_argument(
@@ -76,7 +79,12 @@ def main() -> None:
     sw, sh = detect_screen_resolution()
     profile_mgr = ProfileManager(profiles_dir=str(config.get("profile.profiles_dir", "profiles")))
     tuned = apply_user_filters(config, profile_mgr, args.user)
-    pipeline = GazeEstimationPipeline(config=config, screen_width=sw, screen_height=sh)
+    if args.direct:
+        from gaze_estimation.direct import DirectGazeEngine
+
+        pipeline = DirectGazeEngine(config, sw, sh)
+    else:
+        pipeline = GazeEstimationPipeline(config=config, screen_width=sw, screen_height=sh)
     try:
         model_kind = attach_user_model(pipeline, config, profile_mgr, args.user)
     except RuntimeError as exc:

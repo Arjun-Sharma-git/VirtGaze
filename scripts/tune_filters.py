@@ -32,6 +32,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--config", default="configs/example_config.yaml")
     p.add_argument("--user", default="default")
     p.add_argument(
+        "--direct", action="store_true", help="Use the direct engine (direct_calibrate.py)"
+    )
+    p.add_argument(
         "--duration", type=float, default=40.0, help="Seconds of moving target (default 40)"
     )
     p.add_argument("--holds", type=int, default=8, help="Still targets before the motion")
@@ -88,7 +91,12 @@ def main() -> None:
     # Start from the current tuning (if any), so a re-run refines it.
     apply_filter_params(config, filters_path)
 
-    pipeline = GazeEstimationPipeline(config=config, screen_width=sw, screen_height=sh)
+    if args.direct:
+        from gaze_estimation.direct import DirectGazeEngine
+
+        pipeline = DirectGazeEngine(config, sw, sh)
+    else:
+        pipeline = GazeEstimationPipeline(config=config, screen_width=sw, screen_height=sh)
     try:
         attach_user_model(pipeline, config, profile_mgr, args.user)
     except RuntimeError as exc:
