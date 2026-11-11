@@ -11,7 +11,12 @@ import numpy as np
 
 from gaze_estimation.pipeline.schemas import HeadPose, MeshPacket, PosePacket
 from gaze_estimation.pipeline.thread_base import StageThread
-from gaze_estimation.pose.canonical_face import CANONICAL_3D_POINTS, LANDMARK_INDICES
+from gaze_estimation.pose.canonical_face import (
+    CANONICAL_3D_POINTS,
+    DEFAULT_RVEC,
+    DEFAULT_TVEC,
+    LANDMARK_INDICES,
+)
 from gaze_estimation.utils.geometry import rotation_matrix_to_euler
 from gaze_estimation.utils.logging import get_logger
 
@@ -19,6 +24,8 @@ _logger = get_logger("pose.head_pose")
 
 # Fallback when ``pose.solvepnp_method`` names an unknown OpenCV constant.
 _SOLVEPNP_FALLBACK = "SOLVEPNP_ITERATIVE"
+# A webcam user is well within this; farther solutions are solver failures.
+_MAX_FACE_DISTANCE_MM = 5000.0
 
 # RANSAC parameters used when ``pose.use_ransac`` is enabled.
 _RANSAC_ITERATIONS = 100
@@ -133,53 +140,36 @@ class HeadPoseEstimator(StageThread):
     # ── Private ────────────────────────────────────────────────────────────
 
     def _solve_pnp(self, mesh_468: np.ndarray) -> Optional[HeadPose]:
-        """Run solvePnP on the stable subset of face landmarks."""
+        """Run solvePnP on the stable subset of face landmarks.
+
+        Seeds the solver with the previous pose (or a frontal default) and
+        rejects solutions that put the face behind the camera (tz <= 0) or
+        implausibly far away: with
+        six nearly coplanar points the solver can lock onto that mirrored pose
+        and, fed back as the next guess, never leave it.
+        """
         image_points = mesh_468[LANDMARK_INDICES].astype(np.float64)
 
-        # Use previous solution as initial guess for speed + stability
+        # RANSAC misbehaves when seeded with an exact guess, so it starts
+        # unseeded; the iterative solver starts from the frontal default.
+        default = (DEFAULT_RVEC, DEFAULT_TVEC, not self._use_ransac)
         if self._prev_rvec is not None and self._prev_tvec is not None:
-            use_extrinsic = True
-            init_rvec: Optional[np.ndarray] = self._prev_rvec.copy()
-            init_tvec: Optional[np.ndarray] = self._prev_tvec.copy()
+            guesses = [(self._prev_rvec, self._prev_tvec, True), default]
         else:
-            use_extrinsic = False
-            init_rvec = None
-            init_tvec = None
+            guesses = [default]
 
-        try:
-            if self._use_ransac:
-                success, rvec, tvec, _inliers = cv2.solvePnPRansac(
-                    CANONICAL_3D_POINTS,
-                    image_points,
-                    self._camera_matrix,
-                    self._dist_coeffs,
-                    rvec=init_rvec,
-                    tvec=init_tvec,
-                    useExtrinsicGuess=use_extrinsic,
-                    iterationsCount=_RANSAC_ITERATIONS,
-                    reprojectionError=_RANSAC_REPROJECTION_ERROR_PX,
-                    flags=self._flags,
-                )
-            else:
-                success, rvec, tvec = cv2.solvePnP(
-                    CANONICAL_3D_POINTS,
-                    image_points,
-                    self._camera_matrix,
-                    self._dist_coeffs,
-                    rvec=init_rvec,
-                    tvec=init_tvec,
-                    useExtrinsicGuess=use_extrinsic,
-                    flags=self._flags,
-                )
-        except cv2.error as exc:
-            self._logger.debug("solvePnP failed: %s", exc)
+        for init_rvec, init_tvec, use_guess in guesses:
+            solved = self._run_solver(image_points, init_rvec.copy(), init_tvec.copy(), use_guess)
+            if solved is not None and 0.0 < solved[1][2] < _MAX_FACE_DISTANCE_MM:
+                rvec, tvec = solved
+                break
+        else:
+            # Nothing plausible this frame: forget the guess so the next frame
+            # starts from the frontal default instead of a bad pose.
+            self._prev_rvec = None
+            self._prev_tvec = None
             return None
 
-        if not success or rvec is None or tvec is None:
-            return None
-
-        rvec = rvec.flatten()
-        tvec = tvec.flatten()
         self._prev_rvec = rvec.copy()
         self._prev_tvec = tvec.copy()
 
@@ -192,6 +182,47 @@ class HeadPoseEstimator(StageThread):
             euler_angles=euler,
             rotation_matrix=R,
         )
+
+    def _run_solver(
+        self,
+        image_points: np.ndarray,
+        init_rvec: np.ndarray,
+        init_tvec: np.ndarray,
+        use_guess: bool,
+    ) -> Optional[tuple]:
+        """One solvePnP / solvePnPRansac call; returns flat (rvec, tvec) or None."""
+        try:
+            if self._use_ransac:
+                success, rvec, tvec, _inliers = cv2.solvePnPRansac(
+                    CANONICAL_3D_POINTS,
+                    image_points,
+                    self._camera_matrix,
+                    self._dist_coeffs,
+                    rvec=init_rvec,
+                    tvec=init_tvec,
+                    useExtrinsicGuess=use_guess,
+                    iterationsCount=_RANSAC_ITERATIONS,
+                    reprojectionError=_RANSAC_REPROJECTION_ERROR_PX,
+                    flags=self._flags,
+                )
+            else:
+                success, rvec, tvec = cv2.solvePnP(
+                    CANONICAL_3D_POINTS,
+                    image_points,
+                    self._camera_matrix,
+                    self._dist_coeffs,
+                    rvec=init_rvec,
+                    tvec=init_tvec,
+                    useExtrinsicGuess=use_guess,
+                    flags=self._flags,
+                )
+        except cv2.error as exc:
+            self._logger.debug("solvePnP failed: %s", exc)
+            return None
+
+        if not success or rvec is None or tvec is None:
+            return None
+        return rvec.flatten().astype(np.float64), tvec.flatten().astype(np.float64)
 
     @staticmethod
     def rotation_to_euler(rvec: np.ndarray) -> np.ndarray:

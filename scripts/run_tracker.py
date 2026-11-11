@@ -205,6 +205,8 @@ def main() -> None:
     log_fps = bool(log_cfg.get("log_fps", True))
     log_latency = bool(log_cfg.get("log_latency", True))
     renderer = OverlayRenderer(
+        screen_width=screen_w,
+        screen_height=screen_h,
         draw_iris=True,
         draw_mesh=args.debug,
         draw_fps=log_fps,

@@ -356,3 +356,27 @@ def test_chain_started_from_a_low_confidence_mesh_still_emits_a_gaze_packet():
     assert gaze_packet.head_pose is None
     assert gaze_packet.gaze_ray_left is None
     assert gaze_packet.confidence == 0.0
+
+
+def test_frontal_face_is_near_identity_in_front_of_the_camera():
+    """A face looking at the camera must not sit on the +/-180 deg seam."""
+    estimator, _, _ = _estimator()
+
+    pose = estimator._solve_pnp(_mesh_for_pose(np.zeros(3), np.array([0.0, 0.0, 600.0])))
+
+    assert pose is not None
+    assert pose.tvec[2] > 0.0
+    np.testing.assert_allclose(pose.euler_angles, [0.0, 0.0, 0.0], atol=1.0)
+
+
+def test_behind_the_camera_guess_is_abandoned():
+    """A mirrored previous pose (tz < 0) must not be carried forward."""
+    estimator, _, _ = _estimator()
+    estimator._prev_rvec = np.array([0.0, np.pi, 0.0])
+    estimator._prev_tvec = np.array([0.0, 0.0, -600.0])
+
+    pose = estimator._solve_pnp(_mesh_for_pose(np.zeros(3), np.array([0.0, 0.0, 600.0])))
+
+    assert pose is not None
+    np.testing.assert_allclose(pose.tvec, [0.0, 0.0, 600.0], atol=2.0)
+    assert estimator._prev_tvec[2] > 0.0

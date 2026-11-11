@@ -45,6 +45,8 @@ class OverlayRenderer:
         draw_fps: bool = True,
         draw_latency: bool = True,
         copy: bool = True,
+        screen_width: int = 1920,
+        screen_height: int = 1080,
     ) -> None:
         self._draw_mesh = draw_mesh
         self._draw_iris = draw_iris
@@ -53,6 +55,10 @@ class OverlayRenderer:
         self._draw_fps = draw_fps
         self._draw_latency = draw_latency
         self._copy = copy
+        # Gaze estimates are in screen pixels; the dot is drawn as a fraction
+        # of the screen, so this must be the real display size.
+        self._screen_width = max(1, int(screen_width))
+        self._screen_height = max(1, int(screen_height))
 
     def render(
         self,
@@ -91,8 +97,8 @@ class OverlayRenderer:
         # we scale the screen gaze to [0,1] and re-project onto frame
         if estimate is not None and estimate.confidence > 0.3:
             # Approximate: display gaze as fraction of frame
-            gx = int(np.clip(estimate.screen_x / 1920 * w, 0, w - 1))
-            gy = int(np.clip(estimate.screen_y / 1080 * h, 0, h - 1))
+            gx = int(np.clip(estimate.screen_x / self._screen_width * w, 0, w - 1))
+            gy = int(np.clip(estimate.screen_y / self._screen_height * h, 0, h - 1))
 
             state_color = self.COLOR_STATE.get(estimate.fixation_state, self.COLOR_GAZE)
 

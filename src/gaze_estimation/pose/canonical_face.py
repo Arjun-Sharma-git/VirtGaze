@@ -7,8 +7,15 @@ import numpy as np
 # ── Canonical 3D face model (head coordinate frame, mm) ──────────────────────
 # Average human face landmark positions used as PnP reference points.
 # Indexed to match LANDMARK_INDICES below.
-
-CANONICAL_3D_POINTS = np.array(
+#
+# The head frame uses the OpenCV camera convention: X towards the image right,
+# Y down, Z away from the camera (the nose is the point nearest the camera).
+# A face looking straight at the camera therefore has R = I, small Euler
+# angles and tz > 0.  The values below were first written Y-up / Z-towards-
+# the-viewer, which made a frontal face R = Rx(180 deg): head roll and the
+# head-frame gaze yaw then sat on the +/-180 deg seam and flipped sign from
+# frame to frame, which wrecked the calibrated model.
+_CANONICAL_Y_UP = np.array(
     [
         [0.0, 0.0, 0.0],  # 0  Nose tip
         [0.0, -63.6, -12.5],  # 1  Chin
@@ -19,6 +26,12 @@ CANONICAL_3D_POINTS = np.array(
     ],
     dtype=np.float64,
 )
+CANONICAL_3D_POINTS = _CANONICAL_Y_UP * np.array([1.0, -1.0, -1.0])
+
+# A frontal face about 60 cm from the camera: the solvePnP starting point when
+# there is no previous pose, and the reset after an implausible solution.
+DEFAULT_RVEC = np.zeros(3, dtype=np.float64)
+DEFAULT_TVEC = np.array([0.0, 0.0, 600.0], dtype=np.float64)
 
 # Corresponding MediaPipe Face Mesh landmark indices (468-point model)
 LANDMARK_INDICES = [1, 152, 33, 263, 61, 291]
