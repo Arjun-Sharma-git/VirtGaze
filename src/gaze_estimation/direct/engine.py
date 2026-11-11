@@ -35,6 +35,26 @@ from gaze_estimation.utils.logging import get_logger
 _logger = get_logger("direct.engine")
 
 
+def apply_camera_mode(config: Config, mode: Optional[str]) -> None:
+    """Set camera.width/height/fourcc from a "WxH" string ("" or None: keep).
+
+    1280x720 also requests MJPG: uncompressed 720p runs at ~10 FPS on most
+    UVC webcams.
+    """
+    if not mode:
+        return
+    w, h = (int(v) for v in str(mode).lower().split("x"))
+    config.set("camera.width", w)
+    config.set("camera.height", h)
+    config.set("camera.fourcc", "MJPG" if w * h > 640 * 480 else "")
+
+
+def camera_mode(config: Config) -> tuple:
+    cam = config.section("camera")
+    return (int(cam.get("width", 0) or 0), int(cam.get("height", 0) or 0),
+            str(cam.get("fourcc", "") or ""))
+
+
 def eye_aspect_ratios(points: np.ndarray) -> tuple:
     """(left, right) eye openness: lid gap / eye width, from normalised landmarks."""
 
@@ -86,6 +106,13 @@ class DirectGazeEngine:
 
     def set_ridge_model(self, ridge) -> None:
         self._ridge = ridge
+        camera = getattr(ridge, "camera", None)
+        if camera is not None and self._thread is None:
+            # Before start(): run the camera in the mode the model was calibrated in
+            w, h, fcc = camera
+            self._config.set("camera.width", w)
+            self._config.set("camera.height", h)
+            self._config.set("camera.fourcc", fcc)
 
     def set_model(self, *args, **kwargs) -> None:  # MLP: not used in direct mode
         _logger.warning("Direct mode uses the landmark ridge model only; MLP ignored")

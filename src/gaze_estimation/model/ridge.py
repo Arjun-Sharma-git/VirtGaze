@@ -36,6 +36,9 @@ class RidgeGazeModel:
         # region, see landmark_features.landmark_columns).  Full feature
         # vectors are always passed in and stored; the subset is applied here.
         self.columns = None if columns is None else np.asarray(columns, dtype=np.int64)
+        # Camera mode the model was calibrated with: (width, height, fourcc).
+        # Landmark noise differs between modes, so trackers reuse it.
+        self.camera: Optional[tuple] = None
         self.screen_width = 1920
         self.screen_height = 1080
         # (mean, std, coef (D, 2), intercept, gain, bias); see _solve
@@ -168,6 +171,7 @@ class RidgeGazeModel:
             X=self._X,
             Y=self._Y,
             offset=self.offset,
+            camera=np.array([] if self.camera is None else [str(v) for v in self.camera]),
         )
         os.replace(tmp, path)
 
@@ -183,6 +187,9 @@ class RidgeGazeModel:
             model.screen_width, model.screen_height = (int(v) for v in data["screen"])
             model._X = data["X"].astype(np.float32)
             model._Y = data["Y"].astype(np.float32)
+            if "camera" in data.files and data["camera"].size == 3:
+                w, h, fcc = (str(v) for v in data["camera"])
+                model.camera = (int(w), int(h), fcc)
             if "offset" in data.files:
                 model.offset = data["offset"].astype(np.float64)
         model.refit()

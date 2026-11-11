@@ -62,6 +62,12 @@ def main() -> None:
     if apply_user_filters(config, profile_mgr, args.user):
         print(f"[direct] Using tuned filter settings for '{args.user}'")
     ridge = RidgeGazeModel.load(ridge_path, alpha=float(config.get("inference.ridge_alpha", 1.0)))
+    if ridge.camera is not None:
+        # Run the camera in the mode the model was calibrated with
+        w, h, fcc = ridge.camera
+        config.set("camera.width", w)
+        config.set("camera.height", h)
+        config.set("camera.fourcc", fcc)
 
     engine = DirectGazeEngine(config, sw, sh)
     engine.set_ridge_model(ridge)

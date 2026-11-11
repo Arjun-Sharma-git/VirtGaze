@@ -37,6 +37,11 @@ calibration:
   blink_ear_ratio: 0.8     # skip samples whose EAR is below this fraction of recent (0 = off)
   wait_for_face_sec: 2.0   # start once the face is tracked steadily this long (0 = don't wait)
   recenter_on_start: true  # direct tracker: 1 centre dot at start to cancel head drift
+  mode: "dots"             # direct calibration: "dots" | "pursuit" (moving dot) | "both"
+  head_variation: false    # prompt small head moves between dot rows (robust to drift)
+  pursuit_sec: 30.0        # moving-dot calibration length
+  pursuit_period_sec: 30.0 # time for one full pass of the moving dot's figure
+  pursuit_lag_sec: 0.1     # eyes + camera trail a moving dot by about this much
   samples_per_target: 120
   target_duration_sec: 2.0
   pulse_animation: true

@@ -86,7 +86,7 @@ def test_every_default_config_key_is_read_by_the_code():
 def test_default_config_leaf_count_is_stable():
     """Guard against accidentally deleting the config's keys wholesale."""
     default = _load_yaml(DEFAULT_CONFIG)
-    assert len(_leaf_paths(default)) == 85
+    assert len(_leaf_paths(default)) == 90
 
 
 def test_config_default_matches_yaml_top_level_sections():

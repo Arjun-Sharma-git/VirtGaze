@@ -21,6 +21,19 @@ from gaze_estimation.filtering.blink import BlinkDetector
 
 WINDOW = "VirtGaze calibration"
 
+# Shown before each row when head variation is on.  Sampling the same gaze
+# targets from slightly different head positions teaches the model to ignore
+# small head movements, which otherwise show up as drift.
+HEAD_PROMPTS = [
+    "Keep your head where it is",
+    "Move your head slightly LEFT, then keep it there",
+    "Move your head slightly RIGHT, then keep it there",
+    "Tilt your head slightly UP, then keep it there",
+    "Tilt your head slightly DOWN, then keep it there",
+    "Lean slightly CLOSER to the screen",
+    "Lean slightly BACK from the screen",
+]
+
 
 def grid_points(
     rows: int, cols: int, sw: int, sh: int, margin: float, order: str = "serpentine"
@@ -58,8 +71,13 @@ def run_direct_calibration(
     wait_for_face_sec: float = 2.0,
     blink_ear_ratio: float = 0.8,
     order: str = "serpentine",
+    head_variation: bool = False,
+    prompt_sec: float = 2.5,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """Run the dot routine on a started :class:`DirectGazeEngine`.
+
+    With *head_variation*, each row starts with a prompt to shift the head
+    slightly (see :data:`HEAD_PROMPTS`).
 
     Returns ``(X, Y_px)`` (features, target pixels), or ``None`` on ESC.
     """
@@ -71,7 +89,10 @@ def run_direct_calibration(
     Y: list = []
     try:
         _wait_for_face(engine, samples, sw, sh, wait_for_face_sec)
-        for tx, ty in grid_points(rows, cols, sw, sh, margin, order):
+        for i, (tx, ty) in enumerate(grid_points(rows, cols, sw, sh, margin, order)):
+            if head_variation and i % cols == 0:
+                _prompt(sw, sh, HEAD_PROMPTS[(i // cols) % len(HEAD_PROMPTS)], (tx, ty),
+                        prompt_sec)
             start = time.perf_counter()
             radius = 20
             while (el := time.perf_counter() - start) < settle_sec:
@@ -98,6 +119,129 @@ def run_direct_calibration(
     if not X:
         return None
     return np.array(X, dtype=np.float32), np.array(Y, dtype=np.float32)
+
+
+def _prompt(sw: int, sh: int, text: str, next_dot: tuple, seconds: float) -> None:
+    """Show an instruction (and where the next dot will be) for *seconds*."""
+    start = time.perf_counter()
+    while time.perf_counter() - start < seconds:
+        def draw(c):
+            (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.4, 3)
+            cv2.putText(c, text, ((sw - w) // 2, sh // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.4,
+                        (230, 230, 230), 3)
+            cv2.circle(c, (int(next_dot[0]), int(next_dot[1])), 8, (0, 120, 0), -1)
+
+        _show(sw, sh, draw)
+
+
+def lissajous_point(t: float, sw: int, sh: int, margin: float, period: float) -> tuple:
+    """Position at time *t* on a 3:2 Lissajous figure covering the screen."""
+    w = 2 * math.pi / period
+    ax, ay = (0.5 - margin) * sw, (0.5 - margin) * sh
+    return sw / 2 + ax * math.sin(3 * w * t + math.pi / 2), sh / 2 + ay * math.sin(2 * w * t)
+
+
+def run_pursuit_calibration(
+    engine,
+    sw: int,
+    sh: int,
+    duration_sec: float = 30.0,
+    margin: float = 0.03,
+    period_sec: float = 30.0,
+    lag_sec: float = 0.1,
+    lock_on_sec: float = 1.5,
+    blink_ear_ratio: float = 0.8,
+    wait_for_face_sec: float = 2.0,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """Smooth-pursuit calibration: follow a dot sweeping the whole screen.
+
+    The dot traces a 3:2 Lissajous figure out to *margin* from the edges, so
+    one pass covers the screen densely, edges included, and every frame is a
+    sample (several times more data than still dots).  Each frame is paired
+    with where the dot was *lag_sec* earlier: the eyes trail a moving target
+    slightly, and the frame is captured a little before it is processed.
+
+    Returns ``(X, Y_px)``, or ``None`` on ESC.
+    """
+    samples = engine.subscribe_samples()
+    blink = BlinkDetector(ratio=blink_ear_ratio)
+    cv2.namedWindow(WINDOW, cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    X: list = []
+    Y: list = []
+    try:
+        _wait_for_face(engine, samples, sw, sh, wait_for_face_sec)
+        x0, y0 = lissajous_point(0.0, sw, sh, margin, period_sec)
+        _prompt(sw, sh, "Follow the dot with your eyes", (x0, y0), 2.0)
+        start = time.perf_counter()
+        while time.perf_counter() - start < lock_on_sec:
+            _show(sw, sh, lambda c: cv2.circle(c, (int(x0), int(y0)), 18, (0, 255, 0), -1))
+        _drain(samples)
+        start = time.perf_counter()
+        while (el := time.perf_counter() - start) < duration_sec:
+            x, y = lissajous_point(el, sw, sh, margin, period_sec)
+            _show(sw, sh, lambda c: cv2.circle(c, (int(x), int(y)), 18, (0, 255, 0), -1))
+            while True:
+                try:
+                    s = samples.get_nowait()
+                except queue.Empty:
+                    break
+                t = s.timestamp - start - lag_sec
+                if t < 0.5 or s.landmark_features is None:
+                    continue
+                if blink.is_blink(s.left_ear, s.right_ear):
+                    continue
+                X.append(s.landmark_features)
+                Y.append(lissajous_point(t, sw, sh, margin, period_sec))
+    except _Aborted:
+        return None
+    finally:
+        engine.unsubscribe_samples(samples)
+        cv2.destroyWindow(WINDOW)
+    if not X:
+        return None
+    return np.array(X, dtype=np.float32), np.array(Y, dtype=np.float32)
+
+
+def calibrate(engine, sw: int, sh: int, cal_cfg: dict, mode: Optional[str] = None):
+    """Run the configured routine(s): "dots", "pursuit" or "both" (dots first)."""
+    mode = (mode or str(cal_cfg.get("mode", "dots"))).lower()
+    margin = float(cal_cfg.get("edge_margin", 0.03))
+    ratio = float(cal_cfg.get("blink_ear_ratio", 0.8))
+    wait = float(cal_cfg.get("wait_for_face_sec", 2.0))
+    parts = []
+    if mode in ("dots", "both"):
+        res = run_direct_calibration(
+            engine, sw, sh,
+            rows=int(cal_cfg.get("grid_rows", 5)),
+            cols=int(cal_cfg.get("grid_cols", 5)),
+            margin=margin,
+            settle_sec=float(cal_cfg.get("settle_sec", 2.0)),
+            capture_sec=float(cal_cfg.get("target_duration_sec", 1.0)),
+            wait_for_face_sec=wait,
+            blink_ear_ratio=ratio,
+            order=str(cal_cfg.get("order", "serpentine")),
+            head_variation=bool(cal_cfg.get("head_variation", False)),
+        )
+        if res is None:
+            return None
+        parts.append(res)
+    if mode in ("pursuit", "both"):
+        res = run_pursuit_calibration(
+            engine, sw, sh,
+            duration_sec=float(cal_cfg.get("pursuit_sec", 30.0)),
+            margin=margin,
+            period_sec=float(cal_cfg.get("pursuit_period_sec", 30.0)),
+            lag_sec=float(cal_cfg.get("pursuit_lag_sec", 0.1)),
+            blink_ear_ratio=ratio,
+            wait_for_face_sec=0.0 if parts else wait,
+        )
+        if res is None:
+            return None
+        parts.append(res)
+    if not parts:
+        raise ValueError(f"unknown calibration mode {mode!r}")
+    return np.vstack([p[0] for p in parts]), np.vstack([p[1] for p in parts])
 
 
 def _ease(t: float) -> float:

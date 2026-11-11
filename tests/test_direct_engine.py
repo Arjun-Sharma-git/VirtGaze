@@ -73,3 +73,44 @@ def test_eye_aspect_ratio_is_lid_gap_over_width():
     left, right = eye_aspect_ratios(pts)
 
     assert abs(left - 0.3) < 1e-9 and abs(right - 0.1) < 1e-9
+
+
+def test_lissajous_covers_the_screen_inside_the_margin():
+    from gaze_estimation.direct.calibration import lissajous_point
+
+    pts = np.array([lissajous_point(t, 2000, 1000, 0.05, 30.0) for t in np.linspace(0, 30, 3000)])
+
+    assert pts[:, 0].min() >= 100 - 1 and pts[:, 0].max() <= 1900 + 1
+    assert pts[:, 1].min() >= 50 - 1 and pts[:, 1].max() <= 950 + 1
+    # reaches near every edge
+    assert pts[:, 0].min() < 120 and pts[:, 0].max() > 1880
+    assert pts[:, 1].min() < 70 and pts[:, 1].max() > 930
+
+
+def test_unknown_calibration_mode_is_rejected():
+    import pytest
+
+    from gaze_estimation.direct.calibration import calibrate
+
+    with pytest.raises(ValueError):
+        calibrate(object(), 100, 100, {}, mode="nope")
+
+
+def test_camera_mode_is_saved_with_the_model_and_applied(tmp_path):
+    from gaze_estimation.direct.engine import apply_camera_mode, camera_mode
+    from gaze_estimation.model.ridge import RidgeGazeModel
+
+    cfg = Config.default()
+    apply_camera_mode(cfg, "1280x720")
+    assert camera_mode(cfg) == (1280, 720, "MJPG")
+
+    rng = np.random.default_rng(0)
+    model = RidgeGazeModel().fit(rng.normal(size=(30, 4)), rng.uniform(0, 100, (30, 2)), 100, 100)
+    model.camera = camera_mode(cfg)
+    model.save(str(tmp_path / "m.npz"))
+    loaded = RidgeGazeModel.load(str(tmp_path / "m.npz"))
+    assert loaded.camera == (1280, 720, "MJPG")
+
+    eng = DirectGazeEngine(Config.default(), 100, 100)
+    eng.set_ridge_model(loaded)
+    assert camera_mode(eng._config) == (1280, 720, "MJPG")

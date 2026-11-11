@@ -29,6 +29,10 @@ calibration:
   settle_sec: 2.0
   target_duration_sec: 1.0
   blink_ear_ratio: 0.8
+  # Direct calibration (direct_calibrate.py / calibrate_and_run.sh): still dots
+  # with small head moves between rows, then 30 s of following a moving dot.
+  mode: "both"
+  head_variation: true
 
 filtering:
   # Keeps the dot still for small eye/landmark noise (0 to turn off).

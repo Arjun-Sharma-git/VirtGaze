@@ -29,6 +29,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--margin", type=float, default=None, help="Edge margin, fraction")
     p.add_argument("--settle", type=float, default=None, help="Seconds before recording")
     p.add_argument("--capture", type=float, default=None, help="Seconds recorded per dot")
+    p.add_argument("--mode", choices=("dots", "pursuit", "both"), default=None,
+                   help="Still dots, a moving dot to follow, or both (default: config)")
+    p.add_argument("--pursuit-sec", type=float, default=None, help="Moving-dot duration")
+    p.add_argument("--camera", default=None,
+                   help="Camera mode WxH, e.g. 1280x720 (default: config); saved with the model")
+    hv = p.add_mutually_exclusive_group()
+    hv.add_argument("--head-variation", dest="head_variation", action="store_true",
+                    default=None, help="Prompt small head moves between rows")
+    hv.add_argument("--no-head-variation", dest="head_variation", action="store_false")
     return p.parse_args()
 
 
@@ -40,13 +49,16 @@ def main() -> None:
 
     from gaze_estimation.config.config import Config
     from gaze_estimation.direct import DirectGazeEngine
-    from gaze_estimation.direct.calibration import run_direct_calibration
+    from gaze_estimation.direct.calibration import calibrate
     from gaze_estimation.model.ridge import RidgeGazeModel
     from gaze_estimation.profile.profile_manager import ProfileManager
     from gaze_estimation.utils.logging import setup_logging
     from gaze_estimation.utils.screen import detect_screen_resolution
 
     config = Config.from_yaml(args.config)
+    from gaze_estimation.direct.engine import apply_camera_mode, camera_mode
+
+    apply_camera_mode(config, args.camera)
     setup_logging(level="WARNING")
     cal = config.section("calibration")
     sw, sh = detect_screen_resolution()
@@ -54,23 +66,16 @@ def main() -> None:
 
     engine = DirectGazeEngine(config, sw, sh)
     engine.start()
+    overrides = {
+        "grid_rows": args.rows, "grid_cols": args.cols, "edge_margin": args.margin,
+        "settle_sec": args.settle, "target_duration_sec": args.capture,
+        "pursuit_sec": args.pursuit_sec,
+    }
+    cal = {**cal, **{k: v for k, v in overrides.items() if v is not None}}
+    if args.head_variation is not None:
+        cal["head_variation"] = args.head_variation
     try:
-        result = run_direct_calibration(
-            engine,
-            sw,
-            sh,
-            rows=args.rows or int(cal.get("grid_rows", 5)),
-            cols=args.cols or int(cal.get("grid_cols", 5)),
-            margin=args.margin if args.margin is not None else float(cal.get("edge_margin", 0.03)),
-            settle_sec=args.settle if args.settle is not None else float(cal.get("settle_sec", 2.0)),
-            capture_sec=(
-                args.capture if args.capture is not None
-                else float(cal.get("target_duration_sec", 1.0))
-            ),
-            wait_for_face_sec=float(cal.get("wait_for_face_sec", 2.0)),
-            blink_ear_ratio=float(cal.get("blink_ear_ratio", 0.8)),
-            order=str(cal.get("order", "serpentine")),
-        )
+        result = calibrate(engine, sw, sh, cal, mode=args.mode)
     finally:
         engine.stop()
     if result is None:
@@ -86,10 +91,11 @@ def main() -> None:
         columns=landmark_columns(str(config.get("inference.landmark_subset", "eye"))),
     )
     model.fit(X, Y, sw, sh)
+    model.camera = camera_mode(config)
     err = np.linalg.norm(model.predict(X) * [sw, sh] - Y, axis=1)
     path = profile_mgr.get_profile_ridge_path(args.user)
     model.save(path)
-    print(f"[calibration] {len(X)} frames from {len(np.unique(Y, axis=0))} dots; "
+    print(f"[calibration] {len(X)} frames; "
           f"fit error {np.median(err):.0f} px median")
     print(f"[calibration] Saved {path}")
 
