@@ -37,6 +37,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--debug", action="store_true", help="Draw face mesh in the overlay")
     p.add_argument("--no-display", action="store_true", help="Suppress the preview window")
     p.add_argument(
+        "--fullscreen",
+        action="store_true",
+        help="Show the preview fullscreen, so the gaze dot is where you look on screen",
+    )
+    p.add_argument(
         "--implicit-calibration",
         action="store_true",
         help="Enable click-based online adaptation (fullscreen window)",
@@ -252,8 +257,8 @@ def main() -> None:
 
     if not args.no_display:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        if args.implicit_calibration:
-            # Fullscreen so window pixels == screen pixels for click targets
+        if args.implicit_calibration or args.fullscreen:
+            # Fullscreen so window pixels == screen pixels (dot and click targets)
             cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.setMouseCallback(WINDOW_NAME, _on_mouse)
 
@@ -314,9 +319,10 @@ def main() -> None:
                             debug_saved += 1
                         except Exception as exc:
                             print(f"[tracker] Could not write debug frame: {exc}")
-                if implicit is not None:
+                if implicit is not None or args.fullscreen:
                     # Match the screen resolution so clicks map 1:1 to pixels
                     display = cv2.resize(display, (screen_w, screen_h))
+                if implicit is not None:
                     info = f"clicks={clicks_used} accepted  " f"retrains={implicit.retrain_count}"
                     cv2.putText(
                         display,
