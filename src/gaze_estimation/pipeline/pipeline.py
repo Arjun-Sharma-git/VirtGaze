@@ -503,7 +503,6 @@ class GazeEstimationPipeline:
             config=cfg,
             screen_width=self._screen_width,
             screen_height=self._screen_height,
-            tap_queue=self._queues["calibration"],
         )
         self._inference_stage = inf_thread
         # Apply anything that was configured before start()

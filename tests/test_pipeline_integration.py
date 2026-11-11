@@ -430,3 +430,38 @@ def test_pipeline_runs_with_custom_frame_source_integration():
         pipeline.stop()
 
     assert pipeline._stages == []
+
+
+def test_calibration_tap_is_fed_only_by_gaze_stage_integration():
+    """Only GazePackets may reach the calibration tap.
+
+    The inference stage used to share it, so calibration read a
+    PredictionPacket and crashed on ``packet.features``.
+    """
+    import time
+
+    from gaze_estimation.gaze.gaze_geometry import GazeGeometryEstimator
+    from gaze_estimation.pipeline.pipeline import GazeEstimationPipeline
+    from gaze_estimation.pipeline.thread_base import StageThread
+
+    class _NullSource(StageThread):
+        def __init__(self, output_queue, stop_event):
+            super().__init__(
+                input_queue=None,
+                output_queue=output_queue,
+                stop_event=stop_event,
+                name="null_source",
+            )
+
+        def process(self, item) -> None:
+            time.sleep(0.01)
+
+    pipeline = GazeEstimationPipeline(config=Config.default())
+    tap = pipeline.get_gaze_queue()
+    try:
+        pipeline.start(frame_source=_NullSource(pipeline.frame_queue, pipeline.stop_event))
+        feeders = [s for s in pipeline._stages if s.tap_queue is tap]
+        assert len(feeders) == 1
+        assert isinstance(feeders[0], GazeGeometryEstimator)
+    finally:
+        pipeline.stop()

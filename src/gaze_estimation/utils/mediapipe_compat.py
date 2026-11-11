@@ -91,8 +91,11 @@ class _TasksFaceDetection:
             min_detection_confidence=min_detection_confidence,
         )
         self._detector = vision.FaceDetector.create_from_options(options)
+        self._closed = False
 
     def process(self, rgb: np.ndarray) -> SimpleNamespace:
+        if self._closed:
+            return SimpleNamespace(detections=[])
         h, w = rgb.shape[:2]
         result = self._detector.detect(_mp_image(rgb))
         detections: List[SimpleNamespace] = []
@@ -122,6 +125,7 @@ class _TasksFaceDetection:
         return SimpleNamespace(detections=detections)
 
     def close(self) -> None:
+        self._closed = True
         self._detector.close()
 
 
@@ -152,8 +156,11 @@ class _TasksFaceMesh:
         )
         self._landmarker = vision.FaceLandmarker.create_from_options(options)
         self._last_ts_ms = -1
+        self._closed = False
 
     def process(self, rgb: np.ndarray) -> SimpleNamespace:
+        if self._closed:
+            return SimpleNamespace(multi_face_landmarks=None)
         image = _mp_image(rgb)
         if self._video:
             # VIDEO mode needs strictly increasing timestamps.
@@ -166,6 +173,7 @@ class _TasksFaceMesh:
         return SimpleNamespace(multi_face_landmarks=faces or None)
 
     def close(self) -> None:
+        self._closed = True
         self._landmarker.close()
 
 

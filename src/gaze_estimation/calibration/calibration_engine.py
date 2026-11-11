@@ -251,7 +251,8 @@ class CalibrationEngine:
             except queue.Empty:
                 continue
 
-            if packet.confidence < 0.3:
+            # The tap carries GazePackets; ignore anything else defensively.
+            if not hasattr(packet, "features") or packet.confidence < 0.3:
                 continue
 
             collected.append(
