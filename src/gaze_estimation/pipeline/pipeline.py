@@ -13,9 +13,9 @@ import numpy as np
 from gaze_estimation.capture.camera import CameraCapture
 from gaze_estimation.config.config import Config
 from gaze_estimation.detection.face_detector import FaceDetector
+from gaze_estimation.filtering.blink import BlinkDetector
 from gaze_estimation.filtering.fixation_detector import FixationDetector
 from gaze_estimation.filtering.one_euro import OneEuroFilter2D
-from gaze_estimation.filtering.blink import BlinkDetector
 from gaze_estimation.filtering.unscented_kalman import UnscentedKalmanFilter
 from gaze_estimation.gaze.gaze_geometry import GazeGeometryEstimator
 from gaze_estimation.mesh.face_mesh import FaceMeshExtractor

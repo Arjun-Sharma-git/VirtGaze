@@ -15,9 +15,10 @@ class _FixedRidge:
 
 
 def _engine() -> DirectGazeEngine:
-    from gaze_estimation.pipeline.pipeline import FilterStage
     import queue
     import threading
+
+    from gaze_estimation.pipeline.pipeline import FilterStage
 
     eng = DirectGazeEngine(Config.default(), 2000, 1000)
     eng._filter = FilterStage(queue.Queue(), eng._filter_out, threading.Event(),

@@ -174,22 +174,21 @@ class CameraCapture(StageThread):
         # breaks" — the webcam silently brightens/darkens and the iris
         # landmarks shift.  The meaning of CAP_PROP_AUTO_EXPOSURE is
         # backend-specific: V4L2 (Linux) uses 3 = auto / 1 = manual, while
-        # DirectShow (Windows) uses 0.75 / 0.25.  Set both conventions and log
-        # what the driver actually reports; failure is non-fatal.
+        # DirectShow / MSMF (Windows) use 0.75 / 0.25.  Send only the value for
+        # this backend: V4L2 maps 0.75 to manual mode, so sending both
+        # conventions (as this code once did) switched auto-exposure *off* on
+        # Linux, leaving the exposure frozen.  Failure is non-fatal.
         try:
-            cap.set(
-                cv2.CAP_PROP_AUTO_EXPOSURE,
-                3.0 if self._auto_exposure else 1.0,
-            )
-            cap.set(
-                cv2.CAP_PROP_AUTO_EXPOSURE,
-                0.75 if self._auto_exposure else 0.25,
-            )
-            self._logger.info(
-                "Auto-exposure %s (driver reports %.2f)",
-                "enabled" if self._auto_exposure else "disabled",
-                cap.get(cv2.CAP_PROP_AUTO_EXPOSURE),
-            )
+            value = _auto_exposure_value(cap, self._auto_exposure)
+            if value is None:
+                self._logger.info("Auto-exposure left to the driver (unknown backend)")
+            else:
+                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, value)
+                self._logger.info(
+                    "Auto-exposure %s (driver reports %.2f)",
+                    "enabled" if self._auto_exposure else "disabled",
+                    cap.get(cv2.CAP_PROP_AUTO_EXPOSURE),
+                )
         except Exception as exc:
             self._logger.debug("Could not set auto-exposure: %s", exc)
 
@@ -224,3 +223,18 @@ class CameraCapture(StageThread):
         self._release()
         time.sleep(_RECONNECT_DELAY_SEC)
         self._open_camera()
+
+
+def _auto_exposure_value(cap, enabled: bool):
+    """CAP_PROP_AUTO_EXPOSURE value for this capture's backend, or None."""
+    import sys
+
+    try:
+        backend = str(cap.getBackendName()).upper()
+    except Exception:
+        backend = ""
+    if backend == "V4L2" or (not backend and sys.platform.startswith("linux")):
+        return 3.0 if enabled else 1.0
+    if backend in ("DSHOW", "MSMF") or (not backend and sys.platform == "win32"):
+        return 0.75 if enabled else 0.25
+    return None

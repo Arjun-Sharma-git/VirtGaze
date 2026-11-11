@@ -34,22 +34,18 @@ class RidgeGazeModel:
         self.alpha = float(alpha)
         self.screen_width = 1920
         self.screen_height = 1080
-        self._mean: Optional[np.ndarray] = None
-        self._std: Optional[np.ndarray] = None
-        self._coef: Optional[np.ndarray] = None  # (D, 2)
-        self._intercept: Optional[np.ndarray] = None  # (2,)
+        # (mean, std, coef (D, 2), intercept, gain, bias); see _solve
+        self._params: Optional[tuple] = None
         self._X = np.zeros((0, 0), dtype=np.float32)
         self._Y = np.zeros((0, 2), dtype=np.float32)  # screen pixels
         # Drift correction (normalised screen units) added to every prediction;
         # set by the quick recalibration when the head has moved since the
         # full calibration.
         self.offset = np.zeros(2, dtype=np.float64)
-        self._gain = np.ones(2)
-        self._bias = np.zeros(2)
 
     @property
     def is_trained(self) -> bool:
-        return self._coef is not None
+        return self._params is not None
 
     @property
     def n_samples(self) -> int:
@@ -94,38 +90,45 @@ class RidgeGazeModel:
             self._solve()
 
     def _solve(self) -> None:
+        """Fit and publish all parameters at once.
+
+        Everything is computed into locals and published as one tuple, so a
+        thread calling :meth:`predict` while another refits (implicit
+        calibration) sees either the old model or the new one, never a mix.
+        """
         X = self._X.astype(np.float64)
         Y = self._Y.astype(np.float64) / np.array([self.screen_width, self.screen_height])
-        self._mean = X.mean(axis=0)
+        mean = X.mean(axis=0)
         std = X.std(axis=0)
-        self._std = np.where(std < 1e-8, 1.0, std)
-        Xs = (X - self._mean) / self._std
+        std = np.where(std < 1e-8, 1.0, std)
+        Xs = (X - mean) / std
         y_mean = Y.mean(axis=0)
         # (Xs^T Xs + alpha I) W = Xs^T (Y - mean): intercept unpenalised
         A = Xs.T @ Xs + self.alpha * np.eye(Xs.shape[1])
-        self._coef = np.linalg.solve(A, Xs.T @ (Y - y_mean))
-        self._intercept = y_mean
-        # The strong penalty shrinks predictions towards the screen centre, so
-        # the edges become unreachable.  Undo that with a per-axis linear
-        # stretch fitted on the training data (prediction -> target).
-        pred = Xs @ self._coef + self._intercept
-        self._gain = np.ones(2)
-        self._bias = np.zeros(2)
+        coef = np.linalg.solve(A, Xs.T @ (Y - y_mean))
+        # The penalty shrinks predictions towards the screen centre, so the
+        # edges become unreachable.  Undo that with a per-axis linear stretch
+        # fitted on the training data (prediction -> target).
+        pred = Xs @ coef + y_mean
+        gain = np.ones(2)
+        bias = np.zeros(2)
         for axis in range(2):
             p = pred[:, axis]
             if np.var(p) > 1e-12:
-                gain, bias = np.polyfit(p, Y[:, axis], 1)
-                self._gain[axis], self._bias[axis] = gain, bias
+                gain[axis], bias[axis] = np.polyfit(p, Y[:, axis], 1)
+        self._params = (mean, std, coef, y_mean, gain, bias)
 
     # ── Inference ──────────────────────────────────────────────────────────
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return normalised screen positions ``(N, 2)`` in ``[0, 1]`` (unclamped)."""
-        if self._coef is None or self._mean is None or self._std is None:
+        params = self._params  # one read: consistent even during a refit
+        if params is None:
             raise RuntimeError("ridge model is not trained")
+        mean, std, coef, intercept, gain, bias = params
         X = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        raw = ((X - self._mean) / self._std) @ self._coef + self._intercept
-        return raw * self._gain + self._bias + self.offset
+        raw = ((X - mean) / std) @ coef + intercept
+        return raw * gain + bias + self.offset
 
     def correct_drift(self, X: np.ndarray, Y_px: np.ndarray) -> np.ndarray:
         """Set :attr:`offset` so predictions on ``X`` centre on ``Y_px``.

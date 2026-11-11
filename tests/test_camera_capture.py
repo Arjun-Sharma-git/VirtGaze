@@ -153,8 +153,9 @@ def test_open_uses_the_requested_camera_index(env):
     assert fake_cv2.requested_indices == [2]
 
 
-def test_auto_exposure_enabled_sets_both_driver_conventions(env):
-    """V4L2 uses 3 = auto; DirectShow uses 0.75.  Both must be sent."""
+def test_auto_exposure_enabled_sends_only_the_v4l2_value_on_linux(env, monkeypatch):
+    """V4L2 uses 3 = auto.  Also sending DirectShow's 0.75 switches V4L2 to manual."""
+    monkeypatch.setattr("sys.platform", "linux")
     stage, fake_cv2, _, _ = env(auto_exposure=True)
 
     stage._open_camera()
@@ -162,12 +163,13 @@ def test_auto_exposure_enabled_sets_both_driver_conventions(env):
     exposure_sets = [
         value for prop, value in fake_cv2.created[0].sets if prop == FakeCV2.CAP_PROP_AUTO_EXPOSURE
     ]
-    assert exposure_sets == [3.0, 0.75]
+    assert exposure_sets == [3.0]
     # The driver's actual reading is queried for the log line.
     assert FakeCV2.CAP_PROP_AUTO_EXPOSURE in fake_cv2.created[0].gets
 
 
-def test_auto_exposure_disabled_sends_the_manual_values(env):
+def test_auto_exposure_disabled_sends_the_v4l2_manual_value_on_linux(env, monkeypatch):
+    monkeypatch.setattr("sys.platform", "linux")
     stage, fake_cv2, _, _ = env(auto_exposure=False)
 
     stage._open_camera()
@@ -175,7 +177,19 @@ def test_auto_exposure_disabled_sends_the_manual_values(env):
     exposure_sets = [
         value for prop, value in fake_cv2.created[0].sets if prop == FakeCV2.CAP_PROP_AUTO_EXPOSURE
     ]
-    assert exposure_sets == [1.0, 0.25]
+    assert exposure_sets == [1.0]
+
+
+def test_auto_exposure_uses_the_directshow_convention_on_windows(env, monkeypatch):
+    monkeypatch.setattr("sys.platform", "win32")
+    stage, fake_cv2, _, _ = env(auto_exposure=True)
+
+    stage._open_camera()
+
+    exposure_sets = [
+        value for prop, value in fake_cv2.created[0].sets if prop == FakeCV2.CAP_PROP_AUTO_EXPOSURE
+    ]
+    assert exposure_sets == [0.75]
 
 
 def test_failed_open_leaves_no_capture(env):

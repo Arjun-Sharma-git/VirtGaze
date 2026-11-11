@@ -154,12 +154,20 @@ class DirectGazeEngine:
         # Only change what was asked for; the driver defaults gave the best
         # landmarks in testing (no forced exposure, FPS or compression).
         fourcc = str(cam.get("fourcc", "") or "")
-        if fourcc:
-            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc[:4]))
+        make_fourcc = getattr(cv2, "VideoWriter_fourcc", None)
+        if fourcc and make_fourcc is not None:
+            cap.set(cv2.CAP_PROP_FOURCC, make_fourcc(*fourcc[:4]))
         w, h = int(cam.get("width", 0) or 0), int(cam.get("height", 0) or 0)
         if w and h:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        # Auto-exposure is a mode the driver remembers between programs, so set
+        # it explicitly (an earlier bug left this webcam stuck in manual).
+        from gaze_estimation.capture.camera import _auto_exposure_value
+
+        value = _auto_exposure_value(cap, bool(cam.get("auto_exposure", True)))
+        if value is not None:
+            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, value)
         return cap
 
     def _run(self, ready: threading.Event) -> None:

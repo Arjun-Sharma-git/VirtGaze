@@ -101,3 +101,17 @@ def test_clicks_added_after_drift_correction_land_where_clicked():
     # Clicked targets are 100 px right of the original data: with the offset
     # carried, the refit must not double-count it.
     assert np.median(model.predict(X[:50])[:, 0] * 1000 - Y[:50, 0]) < 105
+
+
+def test_refit_publishes_parameters_in_one_step():
+    """predict() must see the whole old or whole new model during a refit."""
+    rng = np.random.default_rng(5)
+    X = rng.normal(size=(60, 5))
+    model = RidgeGazeModel().fit(X, rng.uniform(0, 100, size=(60, 2)), 100, 100)
+    before = model._params
+
+    model.add_samples(X[:5], rng.uniform(0, 100, size=(5, 2)))
+    model.refit()
+
+    assert model._params is not before
+    assert len(model._params) == 6

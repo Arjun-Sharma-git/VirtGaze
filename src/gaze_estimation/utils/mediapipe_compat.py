@@ -19,6 +19,7 @@ on first use when missing.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 import urllib.request
@@ -33,14 +34,18 @@ from gaze_estimation.utils.logging import get_logger
 _logger = get_logger("utils.mediapipe_compat")
 
 _MODEL_BASE = "https://storage.googleapis.com/mediapipe-models"
+# Pinned to version 1 with its SHA-256, so an upstream "latest" change cannot
+# silently change tracking accuracy (EyeTrax pins the same landmarker file).
 FACE_DETECTOR_MODEL = (
     "blaze_face_short_range.tflite",
-    f"{_MODEL_BASE}/face_detector/blaze_face_short_range/float16/latest/"
+    f"{_MODEL_BASE}/face_detector/blaze_face_short_range/float16/1/"
     "blaze_face_short_range.tflite",
+    "b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f",
 )
 FACE_LANDMARKER_MODEL = (
     "face_landmarker.task",
-    f"{_MODEL_BASE}/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+    f"{_MODEL_BASE}/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
 )
 
 
@@ -60,16 +65,37 @@ def models_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "models"
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def ensure_model(model: tuple) -> str:
-    """Return the local path of *model*, downloading it once if missing."""
-    filename, url = model
+    """Return the local path of *model*, downloading it once if missing.
+
+    The file must match the pinned SHA-256; a mismatching download is
+    discarded and a mismatching existing file is replaced.
+    """
+    filename, url, sha256 = model
     path = models_dir() / filename
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _logger.info("Downloading MediaPipe model %s", url)
-        tmp = path.with_suffix(path.suffix + ".part")
+    if path.exists() and _sha256(path) == sha256:
+        return str(path)
+    if path.exists():
+        _logger.warning("%s does not match its pinned checksum; downloading again", path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _logger.info("Downloading MediaPipe model %s", url)
+    tmp = path.with_suffix(path.suffix + ".part")
+    try:
         urllib.request.urlretrieve(url, tmp)
+        got = _sha256(tmp)
+        if got != sha256:
+            raise RuntimeError(f"checksum mismatch for {url}: got {got}, expected {sha256}")
         tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return str(path)
 
 
