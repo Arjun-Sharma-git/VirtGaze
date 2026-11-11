@@ -68,8 +68,8 @@ def main() -> None:
         segments_to_flags,
         tune,
     )
-    from gaze_estimation.model.trainer import MLPTrainer
     from gaze_estimation.pipeline.pipeline import GazeEstimationPipeline
+    from gaze_estimation.profile.loading import attach_user_model
     from gaze_estimation.profile.profile_manager import ProfileManager
     from gaze_estimation.utils.logging import setup_logging
     from gaze_estimation.utils.screen import detect_screen_resolution
@@ -82,29 +82,11 @@ def main() -> None:
     # Start from the current tuning (if any), so a re-run refines it.
     apply_filter_params(config, filters_path)
 
-    profile = profile_mgr.load_profile(args.user)
-    if profile is None:
-        sys.exit(f"No calibration for '{args.user}'. Run scripts/run_calibration.py first.")
-
     pipeline = GazeEstimationPipeline(config=config, screen_width=sw, screen_height=sh)
-    if profile.camera_intrinsics:
-        pipeline.set_camera_intrinsics(
-            np.array(profile.camera_intrinsics, dtype=np.float64),
-            np.array(profile.dist_coeffs, dtype=np.float64),
-        )
-    ridge_path = profile_mgr.get_profile_ridge_path(args.user)
-    if str(config.get("inference.model", "ridge")).lower() != "mlp" and os.path.exists(ridge_path):
-        from gaze_estimation.model.ridge import RidgeGazeModel
-
-        pipeline.set_ridge_model(
-            RidgeGazeModel.load(ridge_path, alpha=float(config.get("inference.ridge_alpha", 100.0)))
-        )
-    elif profile.mlp_weights_path and os.path.exists(profile.mlp_weights_path):
-        model, trainer = MLPTrainer().load(profile.mlp_weights_path, config=config)
-        pipeline.set_model(model, trainer)
-    else:
-        sys.exit("The profile has no trained model. Run scripts/run_calibration.py first.")
-    pipeline.update_kappa(profile.kappa_yaw, profile.kappa_pitch)
+    try:
+        attach_user_model(pipeline, config, profile_mgr, args.user)
+    except RuntimeError as exc:
+        sys.exit(str(exc))
 
     pipeline.start()
     tap = pipeline.tap_predictions()
