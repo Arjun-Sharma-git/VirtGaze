@@ -70,6 +70,29 @@ MUTUAL_INDICES = [
 SUBSET_INDICES = LEFT_EYE_INDICES + RIGHT_EYE_INDICES + MUTUAL_INDICES
 LANDMARK_FEATURE_DIM = len(SUBSET_INDICES) * 3 + 3
 
+# Eye region only: iris points plus the eye corners and lid contours.  Brows,
+# cheeks and jaw mostly carry head movement and expression; dropping them cut
+# leave-one-target-out error from ~112 px to ~94 px on a 25-dot calibration.
+EYE_REGION_LANDMARKS = (
+    list(range(468, 478))
+    + [33, 133, 159, 145, 160, 158, 153, 144]
+    + [263, 362, 386, 374, 385, 387, 380, 373]
+)
+
+
+def landmark_columns(subset: str = "eye") -> Optional[list[int]]:
+    """Feature-vector columns for *subset* ("eye" or "full"); None means all."""
+    if str(subset).lower() == "full":
+        return None
+    cols: list[int] = []
+    for i, lm in enumerate(SUBSET_INDICES):
+        if lm in EYE_REGION_LANDMARKS:
+            cols.extend((3 * i, 3 * i + 1, 3 * i + 2))
+    n = LANDMARK_FEATURE_DIM
+    cols.extend((n - 3, n - 2, n - 1))  # face yaw / pitch / roll
+    return cols
+
+
 _OUTER_LEFT = 33
 _OUTER_RIGHT = 263
 _TOP_OF_HEAD = 10

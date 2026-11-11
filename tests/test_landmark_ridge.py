@@ -115,3 +115,27 @@ def test_refit_publishes_parameters_in_one_step():
 
     assert model._params is not before
     assert len(model._params) == 6
+
+
+def test_column_subset_is_used_and_saved(tmp_path):
+    from gaze_estimation.model.landmark_features import LANDMARK_FEATURE_DIM, landmark_columns
+
+    rng = np.random.default_rng(6)
+    X = rng.normal(size=(80, LANDMARK_FEATURE_DIM))
+    cols = landmark_columns("eye")
+    Y = 500 + X[:, cols[:2]] * 50  # depends only on eye columns
+    model = RidgeGazeModel(alpha=1e-3, columns=cols).fit(X, Y, 1000, 1000)
+    path = str(tmp_path / "r.npz")
+    model.save(path)
+
+    loaded = RidgeGazeModel.load(path)
+    assert loaded.columns is not None and list(loaded.columns) == list(cols)
+    noisy = X.copy()
+    noisy[:, [c for c in range(X.shape[1]) if c not in set(cols)]] += 100.0  # non-eye noise
+    np.testing.assert_allclose(loaded.predict(noisy), model.predict(X), atol=1e-6)
+
+
+def test_full_subset_means_all_columns():
+    from gaze_estimation.model.landmark_features import landmark_columns
+
+    assert landmark_columns("full") is None

@@ -30,8 +30,12 @@ class RidgeGazeModel:
 
     DEFAULT_ALPHA = 100.0
 
-    def __init__(self, alpha: float = DEFAULT_ALPHA) -> None:
+    def __init__(self, alpha: float = DEFAULT_ALPHA, columns=None) -> None:
         self.alpha = float(alpha)
+        # Optional subset of feature columns the model uses (e.g. the eye
+        # region, see landmark_features.landmark_columns).  Full feature
+        # vectors are always passed in and stored; the subset is applied here.
+        self.columns = None if columns is None else np.asarray(columns, dtype=np.int64)
         self.screen_width = 1920
         self.screen_height = 1080
         # (mean, std, coef (D, 2), intercept, gain, bias); see _solve
@@ -96,7 +100,7 @@ class RidgeGazeModel:
         thread calling :meth:`predict` while another refits (implicit
         calibration) sees either the old model or the new one, never a mix.
         """
-        X = self._X.astype(np.float64)
+        X = self._select(self._X.astype(np.float64))
         Y = self._Y.astype(np.float64) / np.array([self.screen_width, self.screen_height])
         mean = X.mean(axis=0)
         std = X.std(axis=0)
@@ -126,9 +130,12 @@ class RidgeGazeModel:
         if params is None:
             raise RuntimeError("ridge model is not trained")
         mean, std, coef, intercept, gain, bias = params
-        X = np.atleast_2d(np.asarray(X, dtype=np.float64))
+        X = self._select(np.atleast_2d(np.asarray(X, dtype=np.float64)))
         raw = ((X - mean) / std) @ coef + intercept
         return raw * gain + bias + self.offset
+
+    def _select(self, X: np.ndarray) -> np.ndarray:
+        return X if self.columns is None else X[:, self.columns]
 
     def correct_drift(self, X: np.ndarray, Y_px: np.ndarray) -> np.ndarray:
         """Set :attr:`offset` so predictions on ``X`` centre on ``Y_px``.
@@ -156,6 +163,7 @@ class RidgeGazeModel:
         np.savez(
             tmp,
             alpha=self.alpha,
+            columns=np.array([], dtype=np.int64) if self.columns is None else self.columns,
             screen=np.array([self.screen_width, self.screen_height]),
             X=self._X,
             Y=self._Y,
@@ -167,7 +175,11 @@ class RidgeGazeModel:
     def load(cls, path: str, alpha: Optional[float] = None) -> "RidgeGazeModel":
         """Load the stored samples and refit (with *alpha*, if given)."""
         with np.load(path, allow_pickle=False) as data:
-            model = cls(alpha=float(data["alpha"]) if alpha is None else float(alpha))
+            cols = data["columns"] if "columns" in data.files else np.array([])
+            model = cls(
+                alpha=float(data["alpha"]) if alpha is None else float(alpha),
+                columns=cols if cols.size else None,
+            )
             model.screen_width, model.screen_height = (int(v) for v in data["screen"])
             model._X = data["X"].astype(np.float32)
             model._Y = data["Y"].astype(np.float32)

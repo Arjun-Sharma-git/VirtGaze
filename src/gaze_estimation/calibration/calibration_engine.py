@@ -109,6 +109,7 @@ class CalibrationEngine:
         self.target_duration_sec = target_duration_sec
         self.outlier_sigma = outlier_sigma
         self.edge_margin = _MARGIN  # set from calibration.edge_margin
+        self.landmark_subset = "eye"  # set from inference.landmark_subset
         # EyeTrax-style sampling: show each dot for settle_sec before sampling,
         # skip blink frames, optionally visit dots row by row.
         self.settle_sec = 0.3
@@ -259,7 +260,11 @@ class CalibrationEngine:
 
         X = np.stack([s.landmark_features for s in usable])
         Y = np.array([[s.screen_x, s.screen_y] for s in usable], dtype=np.float32)
-        model = RidgeGazeModel(alpha=self.ridge_alpha).fit(
+        from gaze_estimation.model.landmark_features import landmark_columns
+
+        model = RidgeGazeModel(
+            alpha=self.ridge_alpha, columns=landmark_columns(self.landmark_subset)
+        ).fit(
             X, Y, self.screen_width, self.screen_height
         )
         err = (model.predict(X) * [self.screen_width, self.screen_height]) - Y

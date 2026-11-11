@@ -31,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--implicit-calibration", action="store_true",
                    help="Clicks where you look refine the model")
     p.add_argument("--no-preview", action="store_true", help="Hide the camera preview")
+    p.add_argument("--no-recenter", action="store_true",
+                   help="Skip the one-dot drift correction at start")
     return p.parse_args()
 
 
@@ -64,6 +66,14 @@ def main() -> None:
     engine = DirectGazeEngine(config, sw, sh)
     engine.set_ridge_model(ridge)
     engine.start()
+    if not args.no_recenter and bool(config.get("calibration.recenter_on_start", True)):
+        from gaze_estimation.direct.calibration import recenter
+
+        shift = recenter(engine, ridge, sw, sh)
+        if shift is None:
+            print("[direct] Re-centring skipped (no face or aborted)")
+        else:
+            print(f"[direct] Re-centred: {shift[0]:+.0f} px, {shift[1]:+.0f} px")
 
     win = "VirtGaze"
     cv2.namedWindow(win, cv2.WND_PROP_FULLSCREEN)

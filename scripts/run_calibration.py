@@ -210,6 +210,7 @@ def main() -> None:
             bias_map_smoothing=bias_smoothing,
         )
         engine.ridge_alpha = float(config.get("inference.ridge_alpha", 100.0))
+        engine.landmark_subset = str(config.get("inference.landmark_subset", "eye"))
         engine.edge_margin = float(cal_cfg.get("edge_margin", 0.03))
         engine.settle_sec = float(cal_cfg.get("settle_sec", 0.3))
         engine.order = str(cal_cfg.get("order", "random"))

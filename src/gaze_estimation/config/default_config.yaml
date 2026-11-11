@@ -36,6 +36,7 @@ calibration:
   order: "random"          # "random" | "serpentine" (row by row, alternating direction)
   blink_ear_ratio: 0.8     # skip samples whose EAR is below this fraction of recent (0 = off)
   wait_for_face_sec: 2.0   # start once the face is tracked steadily this long (0 = don't wait)
+  recenter_on_start: true  # direct tracker: 1 centre dot at start to cancel head drift
   samples_per_target: 120
   target_duration_sec: 2.0
   pulse_animation: true
@@ -63,6 +64,7 @@ inference:
   model: "ridge"      # "ridge": landmark ridge model when the profile has one (EyeTrax
                       # approach, see model/landmark_features.py); "mlp": always the MLP
   ridge_alpha: 100.0  # ridge L2 penalty; higher = smoother, less overfit to calibration
+  landmark_subset: "eye"  # ridge features: "eye" (iris + lids) or "full" (+ brows, face)
   backend: "onnx"     # "onnx" | "torch" | "tensorrt"
   device: "CPU"       # "CPU" | "CUDA" | "ROCM" | "auto"
                       # ROCM: AMD GPU via ROCm/HIP (requires onnxruntime-rocm)

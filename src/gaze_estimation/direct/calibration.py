@@ -152,3 +152,66 @@ def _wait_for_face(engine, samples, sw: int, sh: int, seconds: float) -> None:
 
             _show(sw, sh, msg)
         _drain(samples)
+
+
+def recenter(
+    engine,
+    ridge,
+    sw: int,
+    sh: int,
+    settle_sec: float = 1.0,
+    capture_sec: float = 1.5,
+    blink_ear_ratio: float = 0.8,
+) -> Optional[Tuple[float, float]]:
+    """One-dot drift correction: look at the centre, then shift the model.
+
+    Head position drifts between sessions (and within one); most of the
+    resulting error is a constant offset.  This shows one dot, records
+    ``capture_sec`` of frames and sets ``ridge.offset`` so they land on it.
+    Returns the correction in pixels, or ``None`` if aborted / no face.
+    """
+    samples = engine.subscribe_samples()
+    blink = BlinkDetector(ratio=blink_ear_ratio)
+    cx, cy = sw / 2.0, sh / 2.0
+    X: list = []
+    Y: list = []
+    cv2.namedWindow(WINDOW, cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+    def label(c, text="Look at the dot"):
+        (w, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)
+        cv2.putText(c, text, (sw // 2 - w // 2, sh // 2 + 90), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
+                    (200, 200, 200), 2)
+
+    try:
+        start = time.perf_counter()
+        while (el := time.perf_counter() - start) < settle_sec:
+            r = 15 + int(15 * abs(math.sin(2 * math.pi * el)))
+
+            def draw(c, r=r):
+                cv2.circle(c, (int(cx), int(cy)), r, (0, 255, 0), -1)
+                label(c)
+
+            _show(sw, sh, draw)
+        capture_start = time.perf_counter()
+        _drain(samples)
+        while (el := time.perf_counter() - capture_start) < capture_sec:
+            ang = 360 * (1 - _ease(el / capture_sec))
+
+            def draw(c, ang=ang):
+                cv2.circle(c, (int(cx), int(cy)), 20, (0, 255, 0), -1)
+                cv2.ellipse(c, (int(cx), int(cy)), (40, 40), 0, -90, -90 + ang, (255, 255, 255), 4)
+                label(c)
+
+            _show(sw, sh, draw)
+            _collect(samples, blink, capture_start, cx, cy, X, Y)
+        _collect(samples, blink, capture_start, cx, cy, X, Y)
+    except _Aborted:
+        return None
+    finally:
+        engine.unsubscribe_samples(samples)
+        cv2.destroyWindow(WINDOW)
+    if len(X) < 5:
+        return None
+    dx, dy = ridge.correct_drift(np.array(X), np.array(Y))
+    return float(dx), float(dy)

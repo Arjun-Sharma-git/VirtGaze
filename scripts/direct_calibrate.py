@@ -79,7 +79,12 @@ def main() -> None:
     if len(X) < 20:
         sys.exit(f"Only {len(X)} usable frames — is your face visible and lit?")
 
-    model = RidgeGazeModel(alpha=float(config.get("inference.ridge_alpha", 1.0)))
+    from gaze_estimation.model.landmark_features import landmark_columns
+
+    model = RidgeGazeModel(
+        alpha=float(config.get("inference.ridge_alpha", 1.0)),
+        columns=landmark_columns(str(config.get("inference.landmark_subset", "eye"))),
+    )
     model.fit(X, Y, sw, sh)
     err = np.linalg.norm(model.predict(X) * [sw, sh] - Y, axis=1)
     path = profile_mgr.get_profile_ridge_path(args.user)
