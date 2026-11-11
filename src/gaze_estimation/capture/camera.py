@@ -156,6 +156,12 @@ class CameraCapture(StageThread):
             self._cap = None
             return
 
+        # Most UVC webcams only reach 30+ FPS at 720p in MJPG; the raw YUYV
+        # default is often capped at 5-10 FPS.  Ignored by drivers without it.
+        prop_fourcc = getattr(cv2, "CAP_PROP_FOURCC", None)
+        make_fourcc = getattr(cv2, "VideoWriter_fourcc", None)
+        if prop_fourcc is not None and make_fourcc is not None:
+            cap.set(prop_fourcc, make_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         cap.set(cv2.CAP_PROP_FPS, self._target_fps)

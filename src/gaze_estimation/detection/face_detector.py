@@ -95,9 +95,9 @@ class FaceDetector(StageThread):
 
     def _setup(self) -> None:
         try:
-            import mediapipe as mp
+            from gaze_estimation.utils.mediapipe_compat import create_face_detection
 
-            self._detector = mp.solutions.face_detection.FaceDetection(
+            self._detector = create_face_detection(
                 model_selection=self._model_selection,
                 min_detection_confidence=self._min_confidence,
             )

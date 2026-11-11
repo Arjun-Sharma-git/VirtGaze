@@ -58,9 +58,9 @@ class FaceMeshExtractor(StageThread):
 
     def _setup(self) -> None:
         try:
-            import mediapipe as mp
+            from gaze_estimation.utils.mediapipe_compat import create_face_mesh
 
-            self._face_mesh = mp.solutions.face_mesh.FaceMesh(
+            self._face_mesh = create_face_mesh(
                 max_num_faces=self._max_num_faces,
                 refine_landmarks=self._refine_iris,
                 min_detection_confidence=self._min_det_conf,
