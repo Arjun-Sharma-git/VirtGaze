@@ -54,6 +54,8 @@ mlp:
   early_stopping_patience: 20
 
 inference:
+  model: "ridge"      # "ridge": landmark ridge model when the profile has one (EyeTrax
+                      # approach, see model/landmark_features.py); "mlp": always the MLP
   backend: "onnx"     # "onnx" | "torch" | "tensorrt"
   device: "CPU"       # "CPU" | "CUDA" | "ROCM" | "auto"
                       # ROCM: AMD GPU via ROCm/HIP (requires onnxruntime-rocm)
@@ -86,6 +88,7 @@ filtering:
     min_fixation_duration: 0.1
 
 adaptation:
+  ridge_refit_every: 5     # implicit clicks between ridge refits (and saves)
   buffer_max_size: 5000
   retrain_threshold: 50
   retrain_lr: 0.0001

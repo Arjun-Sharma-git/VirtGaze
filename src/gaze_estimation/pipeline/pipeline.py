@@ -111,6 +111,7 @@ class InferenceStage(StageThread):
         self._model: Optional[_ModelLike] = None  # Torch GazeMLP
         self._trainer: Optional[_TrainerLike] = None  # Feature normalisation stats
         self._predictor: Optional[_PredictorLike] = None  # ONNX / TensorRT backend
+        self._ridge = None  # Optional RidgeGazeModel on landmark features (preferred)
         self._source_name = "mlp"  # Reported in GazeEstimate.source
         self._bias_map = None  # Optional BiasMap spatial correction
         self._conf_threshold = float(config.get("inference.confidence_threshold", 0.7))
@@ -139,6 +140,15 @@ class InferenceStage(StageThread):
         self._trainer = trainer
         self._predictor = predictor
         self._source_name = "mlp" if backend == "torch" else str(backend)
+
+    def set_ridge_model(self, ridge) -> None:
+        """Use a :class:`~gaze_estimation.model.ridge.RidgeGazeModel` when it can.
+
+        Packets carrying ``landmark_features`` are mapped by the ridge model
+        (``source == "ridge"``); others fall through to the MLP / fallback.
+        ``None`` turns it off.
+        """
+        self._ridge = ridge
 
     def _place_on_inference_device(self, model):
         """Move an in-process torch model to ``inference.device`` (CUDA/ROCm/auto).
@@ -185,7 +195,20 @@ class InferenceStage(StageThread):
         # when the model is confident but throws.
         use_geometric = False
 
-        if confidence >= self._conf_threshold and has_model:
+        ridge = self._ridge
+        lm_features = getattr(item, "landmark_features", None)
+        if ridge is not None and lm_features is not None and confidence >= self._conf_threshold:
+            try:
+                out = ridge.predict(lm_features)
+                screen_x, screen_y = self._clamp(
+                    float(out[0, 0]) * self._screen_width,
+                    float(out[0, 1]) * self._screen_height,
+                )
+                source = "ridge"
+            except Exception as exc:
+                self._logger.debug("ridge inference failed: %s", exc)
+
+        if source == "hold" and confidence >= self._conf_threshold and has_model:
             assert trainer is not None  # implied by has_model
             try:
                 x_norm = trainer.features_dict_to_vector(item.features)
@@ -401,6 +424,7 @@ class GazeEstimationPipeline:
         self._pending_predictor = None
         self._pending_backend = "torch"
         self._pending_bias_map = None
+        self._pending_ridge = None
 
         # Optional custom frame source (video file / synthetic) set before start()
         self._source: Optional[StageThread] = None
@@ -515,6 +539,8 @@ class GazeEstimationPipeline:
             )
         if self._pending_bias_map is not None:
             inf_thread.set_bias_map(self._pending_bias_map)
+        if self._pending_ridge is not None:
+            inf_thread.set_ridge_model(self._pending_ridge)
 
         filter_thread = FilterStage(
             input_queue=self._queues["prediction"],
@@ -643,6 +669,15 @@ class GazeEstimationPipeline:
         self._pending_backend = backend
         if self._inference_stage is not None:
             self._inference_stage.set_model(model, trainer, predictor=predictor, backend=backend)
+
+    def set_ridge_model(self, ridge) -> None:
+        """Attach a landmark ridge model (preferred over the MLP when present).
+
+        Works both before :meth:`start` and at runtime.
+        """
+        self._pending_ridge = ridge
+        if self._inference_stage is not None:
+            self._inference_stage.set_ridge_model(ridge)
 
     def set_bias_map(self, bias_map) -> None:
         """Attach a :class:`BiasMap` applied to model predictions.

@@ -9,6 +9,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from gaze_estimation.model.landmark_features import extract_landmark_features
 from gaze_estimation.pipeline.schemas import FacePacket, MeshPacket
 from gaze_estimation.pipeline.thread_base import StageThread
 from gaze_estimation.utils.geometry import fit_circle
@@ -102,6 +103,9 @@ class FaceMeshExtractor(StageThread):
         # Extract mesh_468 (or 478 if iris refinement is on)
         n_lms = len(face_lms)
         all_lms = np.array([[lm.x * w, lm.y * h] for lm in face_lms], dtype=np.float32)
+        landmark_features = extract_landmark_features(
+            np.array([[lm.x, lm.y, getattr(lm, "z", 0.0)] for lm in face_lms], dtype=np.float64)
+        )
 
         mesh_468 = all_lms[:468]
         iris_478: Optional[np.ndarray] = all_lms if n_lms >= 478 else None
@@ -146,6 +150,7 @@ class FaceMeshExtractor(StageThread):
                 left_iris_radius=left_radius,
                 right_iris_radius=right_radius,
                 confidence=confidence,
+                landmark_features=landmark_features,
             )
         )
 

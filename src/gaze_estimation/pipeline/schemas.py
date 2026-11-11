@@ -109,6 +109,9 @@ class MeshPacket:
     left_iris_radius: Optional[float]
     right_iris_radius: Optional[float]
     confidence: float
+    # Face-aligned eye-region landmark features (model.landmark_features), used
+    # by the ridge gaze model.  None when no face or no iris landmarks.
+    landmark_features: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -138,6 +141,7 @@ class PosePacket:
     # Carried through from MeshPacket: the gaze feature extractor needs the face
     # box, and this stage is the only remaining holder of it downstream.
     face_bbox: Optional[tuple] = None
+    landmark_features: Optional[np.ndarray] = None  # carried from MeshPacket
 
 
 @dataclass
@@ -160,6 +164,7 @@ class GazePacket:
     features: dict  # FEATURE_KEYS -> float (head-frame, kappa-free)
     head_pose: Optional[HeadPose]
     confidence: float
+    landmark_features: Optional[np.ndarray] = None  # carried from MeshPacket
 
 
 @dataclass
@@ -171,7 +176,7 @@ class PredictionPacket:
     screen_y: float  # pixels
     confidence: float
     raw_features: dict
-    source: str  # "mlp" | "geometric" | "hold"
+    source: str  # "ridge" | "mlp" | "geometric" | "hold"
 
 
 @dataclass
@@ -209,6 +214,7 @@ class CalibrationSample:
     # (or by older callers) still work.
     gaze_yaw_world: Optional[float] = None
     gaze_pitch_world: Optional[float] = None
+    landmark_features: Optional[np.ndarray] = None  # for the ridge model
 
 
 @dataclass
@@ -223,6 +229,7 @@ class CalibrationResult:
     bias_map: Optional[np.ndarray]
     timestamp: float
     screen_resolution: tuple  # (width, height)
+    ridge_model_path: Optional[str] = None
 
 
 # ── Fixation ──────────────────────────────────────────────────────────────────

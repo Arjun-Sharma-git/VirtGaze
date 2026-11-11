@@ -134,6 +134,7 @@ class HeadPoseEstimator(StageThread):
                 head_pose=head_pose,
                 confidence=confidence if head_pose is not None else 0.0,
                 face_bbox=item.face_bbox,
+                landmark_features=item.landmark_features,
             )
         )
 

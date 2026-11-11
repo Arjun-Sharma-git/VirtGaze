@@ -127,6 +127,7 @@ class CalibrationEngine:
         on_target_change: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
         mlp_save_path: Optional[str] = None,
+        ridge_save_path: Optional[str] = None,
     ) -> CalibrationResult:
         """Run the calibration session and return results.
 
@@ -202,6 +203,8 @@ class CalibrationEngine:
 
             bias_map = self._build_bias_map(model, X, Y)
 
+        ridge_path = self._train_ridge(all_samples, ridge_save_path)
+
         return CalibrationResult(
             samples=all_samples,
             mlp_weights_path=mlp_path,
@@ -211,9 +214,29 @@ class CalibrationEngine:
             bias_map=bias_map,
             timestamp=time.time(),
             screen_resolution=(self.screen_width, self.screen_height),
+            ridge_model_path=ridge_path,
         )
 
     # ── Private ────────────────────────────────────────────────────────────
+
+    def _train_ridge(self, samples: List[CalibrationSample], path: Optional[str]) -> Optional[str]:
+        """Fit and save the landmark ridge model (the EyeTrax approach)."""
+        usable = [s for s in samples if s.landmark_features is not None]
+        if len(usable) < 10 or not path:
+            return None
+        from gaze_estimation.model.ridge import RidgeGazeModel
+
+        X = np.stack([s.landmark_features for s in usable])
+        Y = np.array([[s.screen_x, s.screen_y] for s in usable], dtype=np.float32)
+        model = RidgeGazeModel().fit(X, Y, self.screen_width, self.screen_height)
+        err = (model.predict(X) * [self.screen_width, self.screen_height]) - Y
+        _logger.info(
+            "Ridge model trained on %d samples (training error %.0f px median)",
+            len(X),
+            float(np.median(np.linalg.norm(err, axis=1))),
+        )
+        model.save(path)
+        return path
 
     def _build_bias_map(self, model, X: np.ndarray, Y: np.ndarray):
         """Build a residual :class:`BiasMap` from the trained model's errors."""
@@ -267,6 +290,7 @@ class CalibrationEngine:
                     # like (see estimate_kappa).
                     gaze_yaw_world=packet.gaze_yaw,
                     gaze_pitch_world=packet.gaze_pitch,
+                    landmark_features=getattr(packet, "landmark_features", None),
                 )
             )
 

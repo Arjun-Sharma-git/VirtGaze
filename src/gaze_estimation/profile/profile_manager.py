@@ -185,6 +185,10 @@ class ProfileManager:
         """Return the default ONNX model path for a user."""
         return os.path.join(self._profile_dir(user_id), "mlp_model.onnx")
 
+    def get_profile_ridge_path(self, user_id: str) -> str:
+        """Return the landmark ridge model path for a user."""
+        return os.path.join(self._profile_dir(user_id), "ridge_model.npz")
+
     def get_profile_bias_path(self, user_id: str) -> str:
         """Return the default bias map path for a user."""
         return os.path.join(self._profile_dir(user_id), "bias_map.npz")

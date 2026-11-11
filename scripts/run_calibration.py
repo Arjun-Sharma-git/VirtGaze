@@ -205,6 +205,7 @@ def main() -> None:
             on_target_change=_on_target,
             on_progress=_on_progress,
             mlp_save_path=weights_path,
+            ridge_save_path=profile_mgr.get_profile_ridge_path(args.user),
         )
         ui.stop()
         _apply_to_running_pipeline(result)

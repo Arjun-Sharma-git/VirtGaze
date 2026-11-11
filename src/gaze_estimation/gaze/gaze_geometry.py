@@ -141,6 +141,7 @@ class GazeGeometryEstimator(StageThread):
                 features=features,
                 head_pose=item.head_pose,
                 confidence=confidence,
+                landmark_features=getattr(item, "landmark_features", None),
             )
         )
 

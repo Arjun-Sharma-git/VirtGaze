@@ -151,6 +151,23 @@ def main() -> None:
             f"Run: python scripts/run_calibration.py --user {args.user}"
         )
 
+    # ── Landmark ridge model (EyeTrax approach; preferred when present) ───
+    ridge = None
+    ridge_path = profile_mgr.get_profile_ridge_path(args.user)
+    use_ridge = str(config.get("inference.model", "ridge")).lower() != "mlp"
+    if use_ridge and os.path.exists(ridge_path):
+        from gaze_estimation.model.ridge import RidgeGazeModel
+
+        try:
+            ridge = RidgeGazeModel.load(ridge_path)
+            pipeline.set_ridge_model(ridge)
+            print(f"[tracker] Using the landmark ridge model ({ridge.n_samples} samples)")
+        except Exception as exc:
+            ridge = None
+            print(f"[tracker] Could not load ridge model: {exc}")
+    ridge_new_clicks = 0
+    ridge_refit_every = int(config.get("adaptation.ridge_refit_every", 5))
+
     # ── Optional implicit (click-based) calibration ───────────────────────
     online_trainer = None
     implicit = None
@@ -242,6 +259,22 @@ def main() -> None:
             estimate = pipeline.get_latest_estimate()
             mesh_packet = pipeline.get_latest_mesh_packet()
 
+            # ── Implicit calibration with the ridge model: add + refit ─────
+            while ridge is not None and args.implicit_calibration and pending_clicks:
+                cx, cy = pending_clicks.pop(0)
+                packet = pipeline.get_latest_gaze_packet()
+                lm = getattr(packet, "landmark_features", None) if packet is not None else None
+                if lm is None:
+                    print("[tracker] Click ignored: no face landmarks")
+                    continue
+                ridge.add_samples(lm, [[float(cx), float(cy)]])
+                clicks_used += 1
+                ridge_new_clicks += 1
+                if ridge_new_clicks >= ridge_refit_every:
+                    ridge.refit()
+                    ridge.save(ridge_path)
+                    ridge_new_clicks = 0
+
             # ── Implicit calibration: consume queued clicks ────────────────
             while implicit is not None and pending_clicks:
                 cx, cy = pending_clicks.pop(0)
@@ -307,6 +340,10 @@ def main() -> None:
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
+        if ridge is not None and ridge_new_clicks:
+            ridge.refit()
+            ridge.save(ridge_path)
+            print(f"[tracker] Refitted the ridge model on {ridge_new_clicks} new clicks and saved it.")
         if implicit is not None:
             # Fine-tune on (and save) the clicks since the last retrain.
             if implicit.flush():
