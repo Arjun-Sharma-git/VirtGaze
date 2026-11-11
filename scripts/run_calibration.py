@@ -189,6 +189,7 @@ def main() -> None:
             bias_map_rows=bias_rows,
             bias_map_smoothing=bias_smoothing,
         )
+        engine.ridge_alpha = float(config.get("inference.ridge_alpha", 100.0))
         ui = _make_ui()
         ui.start()
 

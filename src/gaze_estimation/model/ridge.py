@@ -21,10 +21,16 @@ class RidgeGazeModel:
     calibration) can be added and the model refitted on everything.
 
     Args:
-        alpha: L2 penalty on the standardised features (EyeTrax default 1.0).
+        alpha: L2 penalty on the standardised features.  The features are
+               ~500 highly correlated landmark coordinates, so a strong
+               penalty generalises far better: on a 25-point webcam
+               calibration, leave-one-target-out error was ~200 px at 1.0
+               and ~120 px at 100.
     """
 
-    def __init__(self, alpha: float = 1.0) -> None:
+    DEFAULT_ALPHA = 100.0
+
+    def __init__(self, alpha: float = DEFAULT_ALPHA) -> None:
         self.alpha = float(alpha)
         self.screen_width = 1920
         self.screen_height = 1080
@@ -115,9 +121,10 @@ class RidgeGazeModel:
         os.replace(tmp, path)
 
     @classmethod
-    def load(cls, path: str) -> "RidgeGazeModel":
+    def load(cls, path: str, alpha: Optional[float] = None) -> "RidgeGazeModel":
+        """Load the stored samples and refit (with *alpha*, if given)."""
         with np.load(path, allow_pickle=False) as data:
-            model = cls(alpha=float(data["alpha"]))
+            model = cls(alpha=float(data["alpha"]) if alpha is None else float(alpha))
             model.screen_width, model.screen_height = (int(v) for v in data["screen"])
             model._X = data["X"].astype(np.float32)
             model._Y = data["Y"].astype(np.float32)

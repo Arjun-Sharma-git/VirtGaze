@@ -159,7 +159,9 @@ def main() -> None:
         from gaze_estimation.model.ridge import RidgeGazeModel
 
         try:
-            ridge = RidgeGazeModel.load(ridge_path)
+            ridge = RidgeGazeModel.load(
+                ridge_path, alpha=float(config.get("inference.ridge_alpha", 100.0))
+            )
             pipeline.set_ridge_model(ridge)
             print(f"[tracker] Using the landmark ridge model ({ridge.n_samples} samples)")
         except Exception as exc:

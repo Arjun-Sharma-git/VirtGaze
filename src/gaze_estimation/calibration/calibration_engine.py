@@ -104,6 +104,7 @@ class CalibrationEngine:
         self.samples_per_target = samples_per_target
         self.target_duration_sec = target_duration_sec
         self.outlier_sigma = outlier_sigma
+        self.ridge_alpha = 100.0  # see RidgeGazeModel; set from inference.ridge_alpha
         self._trainer = mlp_trainer or MLPTrainer()
         self._camera_matrix = camera_matrix
         self._frame_width = frame_width
@@ -228,7 +229,9 @@ class CalibrationEngine:
 
         X = np.stack([s.landmark_features for s in usable])
         Y = np.array([[s.screen_x, s.screen_y] for s in usable], dtype=np.float32)
-        model = RidgeGazeModel().fit(X, Y, self.screen_width, self.screen_height)
+        model = RidgeGazeModel(alpha=self.ridge_alpha).fit(
+            X, Y, self.screen_width, self.screen_height
+        )
         err = (model.predict(X) * [self.screen_width, self.screen_height]) - Y
         _logger.info(
             "Ridge model trained on %d samples (training error %.0f px median)",

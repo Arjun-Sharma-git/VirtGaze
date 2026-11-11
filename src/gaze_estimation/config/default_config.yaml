@@ -56,6 +56,7 @@ mlp:
 inference:
   model: "ridge"      # "ridge": landmark ridge model when the profile has one (EyeTrax
                       # approach, see model/landmark_features.py); "mlp": always the MLP
+  ridge_alpha: 100.0  # ridge L2 penalty; higher = smoother, less overfit to calibration
   backend: "onnx"     # "onnx" | "torch" | "tensorrt"
   device: "CPU"       # "CPU" | "CUDA" | "ROCM" | "auto"
                       # ROCM: AMD GPU via ROCm/HIP (requires onnxruntime-rocm)
