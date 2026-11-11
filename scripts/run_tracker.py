@@ -363,7 +363,10 @@ def main() -> None:
             ridge.refit()
             ridge.save(ridge_path)
             print(f"[tracker] Refitted the ridge model on {ridge_new_clicks} new clicks and saved it.")
-        if implicit is not None:
+        if ridge is not None and args.implicit_calibration:
+            print(f"[tracker] Ridge model: {clicks_used} clicks added this session "
+                  f"({ridge.n_samples} samples in total)")
+        elif implicit is not None:
             # Fine-tune on (and save) the clicks since the last retrain.
             if implicit.flush():
                 print("[tracker] Fine-tuned on the remaining clicks and saved the profile.")
