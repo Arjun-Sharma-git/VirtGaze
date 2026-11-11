@@ -266,10 +266,16 @@ def main() -> None:
     t_last_fps_print = time.perf_counter()
     t_last_debug_save = time.perf_counter()
     clicks_used = 0
+    mesh_packet = None
     try:
         while True:
             estimate = pipeline.get_latest_estimate()
-            mesh_packet = pipeline.get_latest_mesh_packet()
+            # The preview queue is drained each loop, so it is empty whenever no
+            # new camera frame arrived since the last iteration: keep showing the
+            # previous frame then, instead of flashing a black one.
+            new_mesh = pipeline.get_latest_mesh_packet()
+            if new_mesh is not None:
+                mesh_packet = new_mesh
 
             # ── Implicit calibration with the ridge model: add + refit ─────
             while ridge is not None and args.implicit_calibration and pending_clicks:
