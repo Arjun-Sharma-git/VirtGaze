@@ -6,6 +6,7 @@ import math
 import queue
 import threading
 import time
+from collections import deque
 from typing import Optional, Protocol
 
 import numpy as np
@@ -21,6 +22,7 @@ from gaze_estimation.mesh.face_mesh import FaceMeshExtractor
 from gaze_estimation.pipeline.schemas import (
     GazeEstimate,
     GazePacket,
+    GazeState,
     MeshPacket,
     PredictionPacket,
 )
@@ -306,9 +308,60 @@ class FilterStage(StageThread):
         # Small eye/landmark noise inside the radius never moves the dot.
         self._stab_radius = float(config.section("filtering").get("stabilizer_radius_px", 0.0))
         self._shown: Optional[tuple] = None
+        # Blink hold: while the eyes close the landmarks move and the model
+        # reads it as a large gaze shift.  A blink is an eye aspect ratio well
+        # below this person's recent open-eye level; during it (and a couple of
+        # frames after) the filters are not updated and the last point is kept.
+        filt_cfg = config.section("filtering")
+        self._blink_ratio = float(filt_cfg.get("blink_ear_ratio", 0.75))
+        self._blink_after = int(filt_cfg.get("blink_hold_frames", 3))
+        self._ear_history: deque = deque(maxlen=60)
+        self._hold_left = 0
+        self._last_out: Optional[tuple] = None
+
+    def _is_blink(self, ear: float) -> bool:
+        """Relative blink test, updated with every open-eye sample."""
+        if self._blink_ratio <= 0.0 or ear <= 0.0:
+            return False
+        if len(self._ear_history) >= 15:
+            if ear < self._blink_ratio * float(np.median(self._ear_history)):
+                return True
+        self._ear_history.append(ear)
+        return False
 
     def process(self, item: object) -> None:
         if not isinstance(item, PredictionPacket):
+            return
+
+        ear = (
+            float(item.raw_features.get("left_ear", 0.0))
+            + float(item.raw_features.get("right_ear", 0.0))
+        ) / 2.0
+        if self._is_blink(ear):
+            self._hold_left = self._blink_after
+            held = True
+        elif self._hold_left > 0:
+            self._hold_left -= 1
+            held = True
+        else:
+            held = False
+        if held and self._last_out is not None:
+            gx, gy, _state = self._last_out
+            self.emit(
+                GazeEstimate(
+                    timestamp=item.timestamp,
+                    screen_x=gx,
+                    screen_y=gy,
+                    raw_x=item.screen_x,
+                    raw_y=item.screen_y,
+                    velocity=0.0,
+                    confidence=item.confidence,
+                    fixation_state=GazeState.BLINK,
+                    fixation_duration=0.0,
+                    source=item.source,
+                    latency_ms=(time.perf_counter() - item.timestamp) * 1000.0,
+                )
+            )
             return
 
         dt = item.timestamp - self._prev_t if self._prev_t > 0 else 0.016
@@ -334,6 +387,7 @@ class FilterStage(StageThread):
         right_ear = float(item.raw_features.get("right_ear", 1.0))
         fix_info = self._fixation.update(fx, fy, item.timestamp, left_ear, right_ear)
         self._fixation_ready = True
+        self._last_out = (fx, fy, fix_info.state)
 
         latency_ms = (time.perf_counter() - item.timestamp) * 1000.0
 

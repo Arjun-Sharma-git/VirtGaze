@@ -108,3 +108,29 @@ def test_settle_time_after_a_jump_is_ignored():
 def test_target_positions_are_interpolated_to_frame_times():
     xy = interpolate_targets([0.5], [0.0, 1.0], np.array([[0.0, 0.0], [100.0, 50.0]]))
     np.testing.assert_allclose(xy, [[50.0, 25.0]])
+
+
+def test_blink_freezes_the_dot():
+    """A blink-sized drop in eye aspect ratio must not move the output."""
+    import queue
+    import threading
+
+    from gaze_estimation.pipeline.pipeline import FilterStage
+    from gaze_estimation.pipeline.schemas import GazeState, PredictionPacket
+
+    out: queue.Queue = queue.Queue()
+    stage = FilterStage(queue.Queue(), out, threading.Event(), config=Config.default())
+
+    def feed(t, x, y, ear):
+        stage.process(
+            PredictionPacket(t, x, y, 1.0, {"left_ear": ear, "right_ear": ear}, "ridge")
+        )
+        return out.get_nowait()
+
+    for i in range(30):
+        last = feed(1.0 + i / 30, 1000.0, 700.0, 0.30)
+    during = [feed(2.0 + i / 30, 1000.0, 200.0, 0.10) for i in range(5)]
+
+    for est in during:
+        assert est.fixation_state == GazeState.BLINK
+        assert (est.screen_x, est.screen_y) == (last.screen_x, last.screen_y)

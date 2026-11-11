@@ -81,6 +81,10 @@ filtering:
     kappa: 0.0
   # Dot only moves once gaze leaves this radius, then trails it (0 = off)
   stabilizer_radius_px: 0.0
+  # Blink hold: eye aspect ratio below this fraction of the recent open-eye
+  # level counts as a blink; the dot is frozen then and for N frames after
+  blink_ear_ratio: 0.75
+  blink_hold_frames: 3
   one_euro:
     min_cutoff: 1.0
     beta: 0.015
