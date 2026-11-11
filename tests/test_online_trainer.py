@@ -123,6 +123,21 @@ def test_no_retrain_when_the_batch_is_too_small():
     assert recorder.seen == []
 
 
+def test_min_new_overrides_the_threshold_for_a_final_flush():
+    X, Y = _click_pairs(12)
+    recorder = _RecordingTrainer(hidden_dims=[8, 8], batch_size=8, epochs=1)
+    buffer = AdaptationBuffer()
+    for features, coords in zip(X, Y):
+        buffer.add(dict(zip(FEATURE_KEYS, features.tolist())), float(coords[0]), float(coords[1]))
+    trainer = OnlineTrainer(GazeMLP(hidden_dims=[8, 8]), buffer, recorder, retrain_threshold=50)
+
+    assert trainer.maybe_retrain() is False
+    assert trainer.maybe_retrain(min_new=20) is False
+    assert trainer.maybe_retrain(min_new=10) is True
+    assert recorder.seen[0]["n_samples"] == 12
+    assert buffer.count_new_since_last_train() == 0
+
+
 def test_retrain_happens_once_the_threshold_is_reached():
     X, Y = _click_pairs(60)
     recorder = _RecordingTrainer(hidden_dims=[8, 8], batch_size=8, epochs=1)

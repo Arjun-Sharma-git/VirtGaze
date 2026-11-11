@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from gaze_estimation.adaptation.adaptation_buffer import AdaptationBuffer
 from gaze_estimation.model.mlp import GazeMLP
 from gaze_estimation.model.trainer import MLPTrainer
@@ -54,17 +56,22 @@ class OnlineTrainer:
         """The current (possibly fine-tuned) model."""
         return self._mlp
 
-    def maybe_retrain(self) -> bool:
+    def maybe_retrain(self, min_new: Optional[int] = None) -> bool:
         """Fine-tune the model if enough new samples have accumulated.
+
+        Args:
+            min_new: New samples required, instead of ``retrain_threshold``.
+                     Used to flush the leftover clicks when the session ends.
 
         Returns:
             True if a retrain was performed.
         """
-        if self._buffer.count_new_since_last_train() < self._threshold:
+        needed = self._threshold if min_new is None else max(1, int(min_new))
+        if self._buffer.count_new_since_last_train() < needed:
             return False
 
         X, Y = self._buffer.get_batch()
-        if len(X) < self._threshold:
+        if len(X) < needed:
             return False
 
         _logger.info(

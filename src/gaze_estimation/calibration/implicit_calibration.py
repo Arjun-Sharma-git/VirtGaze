@@ -96,22 +96,39 @@ class ImplicitCalibration:
         )
 
         # Trigger fine-tune if enough new samples
-        retrained = self._trainer.maybe_retrain()
-        if retrained:
-            self._retrain_count += 1
-            _logger.info(
-                "Implicit calibration triggered fine-tune "
-                "(total clicks=%d, skipped=%d, retrains=%d)",
-                self._total_clicks,
-                self._skipped_clicks,
-                self._retrain_count,
-            )
-            if self._on_retrain is not None:
-                try:
-                    self._on_retrain()
-                except Exception as exc:
-                    _logger.warning("on_retrain callback failed: %s", exc)
+        if self._trainer.maybe_retrain():
+            self._after_retrain()
         return True
+
+    def flush(self, min_new: int = 10) -> bool:
+        """Fine-tune on clicks collected since the last retrain.
+
+        Call when the session ends, so clicks short of ``retrain_threshold``
+        are not lost.  Needs at least *min_new* new clicks; fewer are dropped
+        as too little signal to move the model.
+
+        Returns:
+            True if a fine-tune ran (and ``on_retrain`` was called).
+        """
+        if not self._trainer.maybe_retrain(min_new=min_new):
+            return False
+        self._after_retrain()
+        return True
+
+    def _after_retrain(self) -> None:
+        self._retrain_count += 1
+        _logger.info(
+            "Implicit calibration triggered fine-tune "
+            "(total clicks=%d, skipped=%d, retrains=%d)",
+            self._total_clicks,
+            self._skipped_clicks,
+            self._retrain_count,
+        )
+        if self._on_retrain is not None:
+            try:
+                self._on_retrain()
+            except Exception as exc:
+                _logger.warning("on_retrain callback failed: %s", exc)
 
     @property
     def total_clicks(self) -> int:

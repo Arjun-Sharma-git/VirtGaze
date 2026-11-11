@@ -306,6 +306,9 @@ def main() -> None:
         pipeline.stop()
         cv2.destroyAllWindows()
         if implicit is not None:
+            # Fine-tune on (and save) the clicks since the last retrain.
+            if implicit.flush():
+                print("[tracker] Fine-tuned on the remaining clicks and saved the profile.")
             print(
                 f"[tracker] Implicit calibration: {implicit.total_clicks} clicks "
                 f"accepted, {implicit.skipped_clicks} skipped, "

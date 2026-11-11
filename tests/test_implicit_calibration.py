@@ -19,7 +19,8 @@ class _OnlineTrainer:
     ) -> None:
         self.fed.append((x, y))
 
-    def maybe_retrain(self) -> bool:
+    def maybe_retrain(self, min_new=None) -> bool:
+        self.min_new = min_new
         return self.retrain_result
 
 
@@ -79,3 +80,25 @@ def test_velocity_is_estimated_from_click_history():
 
     assert accepted is False
     assert len(trainer.fed) == 1
+
+
+def test_flush_fine_tunes_leftover_clicks_and_saves():
+    trainer = _OnlineTrainer()
+    trainer.retrain_result = True
+    calls: list = []
+    implicit = ImplicitCalibration(trainer, on_retrain=lambda: calls.append(1))
+
+    assert implicit.flush(min_new=10) is True
+    assert trainer.min_new == 10
+    assert calls == [1]
+    assert implicit.retrain_count == 1
+
+
+def test_flush_without_enough_clicks_does_nothing():
+    trainer = _OnlineTrainer()
+    calls: list = []
+    implicit = ImplicitCalibration(trainer, on_retrain=lambda: calls.append(1))
+
+    assert implicit.flush() is False
+    assert calls == []
+    assert implicit.retrain_count == 0
