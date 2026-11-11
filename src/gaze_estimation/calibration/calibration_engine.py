@@ -157,6 +157,8 @@ class CalibrationEngine:
             # Collect samples
             samples = self._collect_samples(gaze_queue, tx, ty)
             all_samples.extend(samples)
+            # Few samples on one side of the screen skew the model there.
+            _logger.info("Target %d/%d  kept %d samples", i + 1, n_targets, len(samples))
 
             if on_progress:
                 on_progress((i + 1) / n_targets)

@@ -17,6 +17,10 @@ inference:
   fallback_to_geometric: true
   confidence_threshold: 0.7
 
+calibration:
+  # 2 s per dot yields only ~30 samples on a 15 FPS webcam; give it longer.
+  target_duration_sec: 4.0
+
 mlp:
   input_dim: 34
   hidden_dims: [64, 128, 64]
