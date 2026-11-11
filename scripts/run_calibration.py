@@ -12,6 +12,8 @@ import os
 import sys
 import threading
 
+import numpy as np
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Gaze calibration session")
@@ -82,6 +84,23 @@ def main() -> None:
             pulse_amplitude=0.3 if pulse else 0.0,
             circular_radius=radius if circular else 0.0,
         )
+
+    def _correct_ridge_drift(result) -> None:
+        """Re-centre the landmark ridge model on the quick-calibration targets."""
+        ridge_path = profile_mgr.get_profile_ridge_path(args.user)
+        usable = [s for s in result.samples if s.landmark_features is not None]
+        if not os.path.exists(ridge_path) or len(usable) < 10:
+            return
+        from gaze_estimation.model.ridge import RidgeGazeModel
+
+        ridge = RidgeGazeModel.load(
+            ridge_path, alpha=float(config.get("inference.ridge_alpha", 100.0))
+        )
+        X = np.stack([s.landmark_features for s in usable])
+        Y = np.array([[s.screen_x, s.screen_y] for s in usable])
+        dx, dy = ridge.correct_drift(X, Y)
+        ridge.save(ridge_path)
+        print(f"[calibration] Ridge drift correction: {dx:+.0f} px, {dy:+.0f} px")
 
     def _apply_to_running_pipeline(result) -> None:
         """Attach the freshly-trained model + kappa to the live pipeline."""
@@ -166,6 +185,7 @@ def main() -> None:
                 mlp_save_path=weights_path,
             )
             ui.stop()
+            _correct_ridge_drift(result)
             _apply_to_running_pipeline(result)
             _persist(result)
             done_event.set()

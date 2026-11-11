@@ -70,3 +70,34 @@ def test_ridge_round_trips_and_refits_with_added_clicks(tmp_path):
 def test_untrained_ridge_refuses_to_predict():
     with pytest.raises(RuntimeError):
         RidgeGazeModel().predict(np.zeros((1, 3)))
+
+
+def test_drift_correction_recentres_predictions_and_persists(tmp_path):
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(100, 6))
+    Y = rng.uniform(0, 1000, size=(100, 2))
+    model = RidgeGazeModel(alpha=1e-3).fit(X, Y, 1000, 1000)
+    shifted_targets = model.predict(X[:20]) * 1000 + [80.0, -40.0]
+
+    dx, dy = model.correct_drift(X[:20], shifted_targets)
+    path = str(tmp_path / "ridge.npz")
+    model.save(path)
+
+    assert (dx, dy) == pytest.approx((80.0, -40.0), abs=1e-6)
+    np.testing.assert_allclose(RidgeGazeModel.load(path).offset, model.offset)
+
+
+def test_clicks_added_after_drift_correction_land_where_clicked():
+    rng = np.random.default_rng(4)
+    X = rng.normal(size=(200, 4))
+    W = rng.normal(size=(4, 2)) * 100
+    Y = 500 + X @ W
+    model = RidgeGazeModel(alpha=1e-6).fit(X, Y, 1000, 1000)
+    model.offset = np.array([0.1, 0.0])
+
+    model.add_samples(X[:50], Y[:50] + [100.0, 0.0])
+    model.refit()
+
+    # Clicked targets are 100 px right of the original data: with the offset
+    # carried, the refit must not double-count it.
+    assert np.median(model.predict(X[:50])[:, 0] * 1000 - Y[:50, 0]) < 105

@@ -134,6 +134,7 @@ class QuickCalibration:
                         # Camera-frame angles for kappa estimation.
                         gaze_yaw_world=pkt.gaze_yaw,
                         gaze_pitch_world=pkt.gaze_pitch,
+                        landmark_features=getattr(pkt, "landmark_features", None),
                     )
                 )
             all_samples.extend(collected)

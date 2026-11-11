@@ -40,6 +40,10 @@ class RidgeGazeModel:
         self._intercept: Optional[np.ndarray] = None  # (2,)
         self._X = np.zeros((0, 0), dtype=np.float32)
         self._Y = np.zeros((0, 2), dtype=np.float32)  # screen pixels
+        # Drift correction (normalised screen units) added to every prediction;
+        # set by the quick recalibration when the head has moved since the
+        # full calibration.
+        self.offset = np.zeros(2, dtype=np.float64)
 
     @property
     def is_trained(self) -> bool:
@@ -73,6 +77,9 @@ class RidgeGazeModel:
         """Append samples (e.g. gaze-directed clicks); call :meth:`refit` to use them."""
         X = np.atleast_2d(np.asarray(X, dtype=np.float32))
         Y_px = np.asarray(Y_px, dtype=np.float32).reshape(-1, 2)
+        # Predictions add the drift offset, so store the target the fit itself
+        # must hit for "fit + offset" to land on Y.
+        Y_px = Y_px - (self.offset * [self.screen_width, self.screen_height]).astype(np.float32)
         if self._X.size == 0:
             self._X, self._Y = X, Y_px
         else:
@@ -104,7 +111,25 @@ class RidgeGazeModel:
         if self._coef is None or self._mean is None or self._std is None:
             raise RuntimeError("ridge model is not trained")
         X = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        return ((X - self._mean) / self._std) @ self._coef + self._intercept
+        return ((X - self._mean) / self._std) @ self._coef + self._intercept + self.offset
+
+    def correct_drift(self, X: np.ndarray, Y_px: np.ndarray) -> np.ndarray:
+        """Set :attr:`offset` so predictions on ``X`` centre on ``Y_px``.
+
+        Uses the median residual per target (robust to stray samples), then the
+        median over targets, so one badly fixated target cannot drag it.
+        Returns the new offset in pixels.
+        """
+        X = np.atleast_2d(np.asarray(X, dtype=np.float64))
+        Y_px = np.asarray(Y_px, dtype=np.float64).reshape(-1, 2)
+        scale = np.array([self.screen_width, self.screen_height], dtype=np.float64)
+        self.offset = np.zeros(2)
+        resid = Y_px / scale - self.predict(X)
+        per_target = [
+            np.median(resid[(Y_px == t).all(axis=1)], axis=0) for t in np.unique(Y_px, axis=0)
+        ]
+        self.offset = np.median(np.array(per_target), axis=0)
+        return self.offset * scale
 
     # ── Persistence ────────────────────────────────────────────────────────
 
@@ -117,6 +142,7 @@ class RidgeGazeModel:
             screen=np.array([self.screen_width, self.screen_height]),
             X=self._X,
             Y=self._Y,
+            offset=self.offset,
         )
         os.replace(tmp, path)
 
@@ -128,5 +154,7 @@ class RidgeGazeModel:
             model.screen_width, model.screen_height = (int(v) for v in data["screen"])
             model._X = data["X"].astype(np.float32)
             model._Y = data["Y"].astype(np.float32)
+            if "offset" in data.files:
+                model.offset = data["offset"].astype(np.float64)
         model.refit()
         return model
