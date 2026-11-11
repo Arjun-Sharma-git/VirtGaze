@@ -37,10 +37,36 @@ def test_tuning_does_not_do_worse_than_the_defaults():
     session = _session()
     base = Config.default()
 
-    result = tune(session, base, n_random=15, n_refine=10)
+    result = tune(session, base, n_random=15, n_refine=10, steadiness=3.0)
 
-    assert result.error_px <= result.baseline["error_px"] + 1e-6
+    def objective(err, jit):
+        return err + 3.0 * jit
+
+    assert objective(result.error_px, result.jitter_px) <= objective(
+        result.baseline["error_px"], result.baseline["jitter_px"]
+    ) + 1e-6
     assert result.error_px == score(session, _with(base, result.params))[0]
+
+
+def test_steadiness_trades_lag_for_less_jitter():
+    session = _session()
+    base = Config.default()
+
+    loose = tune(session, base, n_random=20, n_refine=10, steadiness=0.0)
+    steady = tune(session, base, n_random=20, n_refine=10, steadiness=20.0)
+
+    assert steady.jitter_px < loose.jitter_px
+
+
+def test_stabilizer_holds_the_dot_inside_its_radius():
+    from gaze_estimation.filtering.tuning import jitter, with_params
+
+    session = _session()
+    base = Config.default()
+    stable = with_params(base, {})  # independent copy
+    stable.set("filtering.stabilizer_radius_px", 80.0)
+
+    assert jitter(session, stable) < jitter(session, base)
 
 
 def _with(base, params):

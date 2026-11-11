@@ -59,6 +59,7 @@ class TuningResult:
     error_px: float
     hold_error_px: float
     moving_error_px: float
+    jitter_px: float = 0.0
     baseline: Dict[str, float] = field(default_factory=dict)
 
 
@@ -93,6 +94,14 @@ def with_params(base: Config, params: Dict[str, float]) -> Config:
     return cfg
 
 
+def jitter(session: TuningSession, config: Config) -> float:
+    """Mean frame-to-frame movement of the filtered gaze while the target holds still."""
+    filtered = _replay(session, config)
+    steps = np.linalg.norm(np.diff(filtered, axis=0), axis=1)
+    hold = (session.weight[1:] > 0) & ~session.moving[1:] & ~session.moving[:-1]
+    return float(steps[hold].mean()) if hold.any() else 0.0
+
+
 def score(session: TuningSession, config: Config) -> tuple:
     """Return (overall, hold, moving) mean error in pixels."""
     filtered = _replay(session, config)
@@ -119,8 +128,14 @@ def tune(
     n_refine: int = 80,
     seed: int = 0,
     progress=None,
+    steadiness: float = 3.0,
 ) -> TuningResult:
-    """Random search over :data:`PARAM_RANGES`, then a local log-space refinement."""
+    """Random search over :data:`PARAM_RANGES`, then a local log-space refinement.
+
+    Minimises ``error + steadiness * jitter`` (both pixels).  Error alone
+    favours no smoothing whenever the model is noisy, which leaves the dot
+    shaky; *steadiness* sets how much a steady dot is worth versus lag.
+    """
     rng = np.random.default_rng(seed)
     keys = list(PARAM_RANGES)
     lo = np.log10([PARAM_RANGES[k][0] for k in keys])
@@ -128,7 +143,8 @@ def tune(
 
     def evaluate(logv: np.ndarray) -> float:
         params = dict(zip(keys, (10.0 ** logv).tolist()))
-        return score(session, with_params(base, params))[0]
+        cfg = with_params(base, params)
+        return score(session, cfg)[0] + steadiness * jitter(session, cfg)
 
     start = np.log10([current_params(base)[k] for k in keys])
     best_logv, best = start, evaluate(start)
@@ -160,8 +176,10 @@ def tune(
         error_px=overall,
         hold_error_px=hold,
         moving_error_px=moving,
+        jitter_px=jitter(session, with_params(base, params)),
         baseline={"error_px": b_overall if math.isfinite(b_overall) else baseline_err,
-                  "hold_error_px": b_hold, "moving_error_px": b_moving},
+                  "hold_error_px": b_hold, "moving_error_px": b_moving,
+                  "jitter_px": jitter(session, base)},
     )
 
 
@@ -173,6 +191,7 @@ def save_filter_params(path: str, result: TuningResult) -> None:
             "error_px": result.error_px,
             "hold_error_px": result.hold_error_px,
             "moving_error_px": result.moving_error_px,
+            "jitter_px": result.jitter_px,
             "default_error_px": result.baseline.get("error_px"),
         },
     }

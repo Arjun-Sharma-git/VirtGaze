@@ -21,6 +21,10 @@ calibration:
   # 2 s per dot yields only ~30 samples on a 15 FPS webcam; give it longer.
   target_duration_sec: 4.0
 
+filtering:
+  # Keeps the dot still for small eye/landmark noise (0 to turn off).
+  stabilizer_radius_px: 30.0
+
 mlp:
   input_dim: 34
   hidden_dims: [64, 128, 64]

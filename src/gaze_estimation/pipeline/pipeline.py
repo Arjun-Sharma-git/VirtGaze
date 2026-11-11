@@ -301,6 +301,11 @@ class FilterStage(StageThread):
         # the detector has seen a first sample, otherwise the initial LOST
         # state would freeze the filter.
         self._fixation_ready = False
+        # "Leash" stabiliser: the shown point only moves once the filtered gaze
+        # is more than this far from it, and then trails it at this distance.
+        # Small eye/landmark noise inside the radius never moves the dot.
+        self._stab_radius = float(config.section("filtering").get("stabilizer_radius_px", 0.0))
+        self._shown: Optional[tuple] = None
 
     def process(self, item: object) -> None:
         if not isinstance(item, PredictionPacket):
@@ -322,6 +327,7 @@ class FilterStage(StageThread):
 
         # One Euro
         fx, fy = self._oef.filter(pos[0], pos[1], item.timestamp)
+        fx, fy = self._stabilize(fx, fy)
 
         # Fixation
         left_ear = float(item.raw_features.get("left_ear", 1.0))
@@ -346,6 +352,19 @@ class FilterStage(StageThread):
                 latency_ms=latency_ms,
             )
         )
+
+
+    def _stabilize(self, x: float, y: float) -> tuple:
+        if self._stab_radius <= 0.0 or self._shown is None:
+            self._shown = (x, y)
+            return x, y
+        sx, sy = self._shown
+        dist = math.hypot(x - sx, y - sy)
+        if dist > self._stab_radius:
+            k = (dist - self._stab_radius) / dist
+            sx, sy = sx + (x - sx) * k, sy + (y - sy) * k
+            self._shown = (sx, sy)
+        return sx, sy
 
 
 class GazeEstimationPipeline:

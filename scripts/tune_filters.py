@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-speed", type=float, default=150.0, help="Slowest target speed, px/s")
     p.add_argument("--max-speed", type=float, default=900.0, help="Fastest target speed, px/s")
     p.add_argument("--dry-run", action="store_true", help="Tune and report, but don't save")
+    p.add_argument(
+        "--steadiness",
+        type=float,
+        default=3.0,
+        help="How much a steady dot matters vs. lag (0 = lowest error only; default 3)",
+    )
     return p.parse_args()
 
 
@@ -193,13 +199,14 @@ def main() -> None:
     def _progress(frac: float) -> None:
         print(f"\r[tune] {frac * 100:5.1f}%", end="", flush=True)
 
-    result = tune(session, config, progress=_progress)
+    result = tune(session, config, progress=_progress, steadiness=args.steadiness)
     print()
     b = result.baseline
     print(f"[tune] Before: {b['error_px']:.0f} px average error "
           f"(still {b['hold_error_px']:.0f}, moving {b['moving_error_px']:.0f})")
     print(f"[tune] After:  {result.error_px:.0f} px average error "
           f"(still {result.hold_error_px:.0f}, moving {result.moving_error_px:.0f})")
+    print(f"[tune] Jitter while still: {b.get('jitter_px', 0):.1f} -> {result.jitter_px:.1f} px/frame")
     for key, value in result.params.items():
         print(f"         filtering.{key} = {value:.4g}")
     if args.dry_run:
